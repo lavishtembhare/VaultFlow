@@ -27,7 +27,9 @@ class DatabaseManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'Expense',
+                    UNIQUE(name, type)
                 )
             """)
             cursor.execute("""
@@ -37,16 +39,28 @@ class DatabaseManager:
                 )
             """)
 
-            # Auto-migrate existing database if payment_mode doesn't exist
+            # Migration: Ensure payment_mode exists
             cursor.execute("PRAGMA table_info(transactions)")
-            columns = [col[1] for col in cursor.fetchall()]
-            if "payment_mode" not in columns:
+            t_cols = [col[1] for col in cursor.fetchall()]
+            if "payment_mode" not in t_cols:
                 cursor.execute("ALTER TABLE transactions ADD COLUMN payment_mode TEXT DEFAULT 'UPI'")
 
-            # Default categories
-            defaults = ["Food", "Rent", "Shopping", "Transport", "Bills", "Salary", "Investment", "Other"]
-            for cat in defaults:
-                cursor.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (cat,))
+            # Migration: Ensure type exists in categories
+            cursor.execute("PRAGMA table_info(categories)")
+            c_cols = [col[1] for col in cursor.fetchall()]
+            if "type" not in c_cols:
+                cursor.execute("ALTER TABLE categories ADD COLUMN type TEXT DEFAULT 'Expense'")
+
+            # Default Expense Categories
+            expense_defaults = ["Food", "Bills", "Rent", "Shopping", "Transport", "Entertainment", "Healthcare", "Other"]
+            for cat in expense_defaults:
+                cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Expense')", (cat,))
+
+            # Default Income Categories
+            income_defaults = ["Salary", "Rent Received", "Freelance", "Revenue", "Investment", "Bonus", "Other"]
+            for cat in income_defaults:
+                cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Income')", (cat,))
+
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', '$')")
             conn.commit()
 
@@ -79,16 +93,17 @@ class DatabaseManager:
             """
             return pd.read_sql_query(query, conn, params=(start_date, end_date))
 
-    def get_categories(self):
+    def get_categories(self, tx_type="Expense"):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM categories ORDER BY name ASC")
-            return [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT name FROM categories WHERE type = ? ORDER BY name ASC", (tx_type,))
+            rows = cursor.fetchall()
+            return [r[0] for r in rows] if rows else ["Other"]
 
-    def add_category(self, name):
+    def add_category(self, name, tx_type="Expense"):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (name.strip(),))
+            cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (name.strip(), tx_type))
             conn.commit()
 
     def get_setting(self, key, default=""):
