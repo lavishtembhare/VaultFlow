@@ -1,5 +1,4 @@
 from datetime import datetime
-import re
 import customtkinter as ctk
 from tkinter import messagebox
 from dialogs import AddCategoryDialog, DateTimePickerDialog, SettingsDialog
@@ -13,6 +12,7 @@ class SidebarView(ctk.CTkFrame):
         self.on_currency_change = on_currency_change
         self.on_open_export = on_open_export
         self.on_open_settings = on_open_settings
+        self._is_updating_amount = False
 
         self.grid_rowconfigure(16, weight=1)
 
@@ -40,14 +40,20 @@ class SidebarView(ctk.CTkFrame):
         self.type_toggle.set("Expense")
         self.type_toggle.grid(row=3, column=0, padx=20, pady=(0, 12), sticky="ew")
 
-        # Amount Entry with Keystroke Validation
+        # --- AMOUNT ENTRY WITH DUAL-LAYER NUMERIC PROTECTION ---
         ctk.CTkLabel(self, text="Amount:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=4, column=0, padx=20, pady=(0, 2), sticky="w")
-        vcmd = (self.register(self.validate_amount_keystroke), '%P')
-        self.amount_entry = ctk.CTkEntry(
-            self, placeholder_text="0.00 (e.g. 50k, 7m, 2cr)",
-            validate="key", validatecommand=vcmd
-        )
+        
+        self.amount_var = ctk.StringVar()
+        self.amount_entry = ctk.CTkEntry(self, textvariable=self.amount_var, placeholder_text="0.00")
         self.amount_entry.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
+
+        # Layer 1: Hardware Keystroke Interceptor (drops invalid keys before they render)
+        self.amount_entry.bind("<KeyPress>", self._filter_keypress)
+        if hasattr(self.amount_entry, "_entry"):
+            self.amount_entry._entry.bind("<KeyPress>", self._filter_keypress)
+
+        # Layer 2: Variable Trace Sanitizer (strips non-numeric characters from pastes/edits)
+        self.amount_var.trace_add("write", self._on_amount_write)
 
         # Category Row
         cat_header = ctk.CTkFrame(self, fg_color="transparent")
@@ -110,14 +116,67 @@ class SidebarView(ctk.CTkFrame):
         )
         self.settings_btn.grid(row=18, column=0, padx=20, pady=(0, 20), sticky="ew")
 
-    def validate_amount_keystroke(self, new_val):
-        if new_val == "":
-            return True
-        allow_sh = self.db.get_setting("allow_shorthand", "True") == "True"
-        if allow_sh:
-            return bool(re.match(r'^[0-9.]*[a-zA-Z\s]*$', new_val))
+    def _filter_keypress(self, event):
+        """Blocks non-numeric keystrokes at the hardware event level."""
+        # Allow navigation and control keys
+        if event.keysym in ("BackSpace", "Delete", "Left", "Right", "Tab", "Home", "End", "Return", "Escape", "Up", "Down"):
+            return None
+        # Allow clipboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+A, Ctrl+X)
+        if event.state & 4:
+            return None
+
+        allow_sh = self.db.get_setting("allow_shorthand", "False") == "True"
+        if not allow_sh:
+            # STRICT NUMERIC MODE: Only digits 0-9 and a single decimal point
+            if event.char and not (event.char.isdigit() or event.char == '.'):
+                return "break"
+            if event.char == '.' and '.' in self.amount_var.get():
+                return "break"
         else:
-            return bool(re.match(r'^\d*\.?\d*$', new_val))
+            # Shorthand Mode: Digits, decimal, and shorthand suffix characters
+            allowed_chars = set("0123456789.kmbcrolahstuindeKMBCROLAHSTEINDE ")
+            if event.char and event.char not in allowed_chars:
+                return "break"
+        return None
+
+    def _on_amount_write(self, *args):
+        """Sanitizes the value on change (covers paste, drag-and-drop, and programmatic input)."""
+        if self._is_updating_amount:
+            return
+
+        val = self.amount_var.get()
+        if not val:
+            return
+
+        allow_sh = self.db.get_setting("allow_shorthand", "False") == "True"
+        cleaned = ""
+
+        if not allow_sh:
+            has_dot = False
+            for char in val:
+                if char.isdigit():
+                    cleaned += char
+                elif char == '.' and not has_dot:
+                    cleaned += char
+                    has_dot = True
+        else:
+            allowed = set("0123456789.kmbcrolahstuindeKMBCROLAHSTEINDE ")
+            has_dot = False
+            for char in val:
+                if char.isdigit():
+                    cleaned += char
+                elif char == '.' and not has_dot:
+                    cleaned += char
+                    has_dot = True
+                elif char in allowed and char != '.':
+                    cleaned += char
+
+        if cleaned != val:
+            self._is_updating_amount = True
+            try:
+                self.amount_var.set(cleaned)
+            finally:
+                self._is_updating_amount = False
 
     def on_type_switched(self, selected_type):
         self.cat_title_lbl.configure(text=f"{selected_type} Category:")
@@ -152,14 +211,14 @@ class SidebarView(ctk.CTkFrame):
             self.category_menu.set(cats[-1])
 
     def submit(self):
-        amt_str = self.amount_entry.get().strip()
+        amt_str = self.amount_var.get().strip()
         date_str = self.date_entry.get().strip()
         desc = self.desc_entry.get().strip()
         category = self.category_menu.get()
         payment_mode = self.payment_menu.get()
         tx_type = self.type_toggle.get()
 
-        allow_sh = self.db.get_setting("allow_shorthand", "True") == "True"
+        allow_sh = self.db.get_setting("allow_shorthand", "False") == "True"
         try:
             amt = parse_amount(amt_str, allow_shorthand=allow_sh)
         except ValueError as e:
@@ -178,7 +237,6 @@ class SidebarView(ctk.CTkFrame):
 
         self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc)
         
-        # Tactile button confirmation with widget check
         self.add_btn.configure(text="✔ Added!", fg_color="#10b981")
         def reset_btn():
             try:
@@ -188,7 +246,7 @@ class SidebarView(ctk.CTkFrame):
                 pass
         self.after(800, reset_btn)
 
-        self.amount_entry.delete(0, "end")
+        self.amount_var.set("")
         self.desc_entry.delete(0, "end")
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))

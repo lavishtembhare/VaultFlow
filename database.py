@@ -32,8 +32,8 @@ def format_currency_amount(amount, currency="$", format_style="Millions / Billio
     return f"{currency}{amount:,.2f}"
 
 
-def parse_amount(amt_str, allow_shorthand=True):
-    """Parses standard numbers and shorthand suffixes (e.g. 5k, 7m, 2cr, 10lakh)."""
+def parse_amount(amt_str, allow_shorthand=False):
+    """Parses standard numbers and optional shorthand suffixes (e.g. 5k, 7m, 2cr, 10lakh)."""
     amt_str = amt_str.strip().lower().replace(",", "")
     if not amt_str:
         raise ValueError("Please enter an amount.")
@@ -72,7 +72,7 @@ def parse_amount(amt_str, allow_shorthand=True):
     try:
         val = float(amt_str)
     except ValueError:
-        raise ValueError("Invalid number. Enter numeric digits (or enable shorthand like 5k, 7m, 2cr in Settings).")
+        raise ValueError("Invalid number. Only numeric digits (0-9) and a decimal point are permitted.")
 
     if val <= 0:
         raise ValueError("Amount must be greater than zero.")
@@ -109,7 +109,7 @@ class DatabaseManager:
                 )
             """)
 
-            # Fix categories schema: Rebuild if old single-column UNIQUE(name) exists
+            # Fix categories schema if needed
             cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'")
             cat_meta = cursor.fetchone()
             if cat_meta:
@@ -155,11 +155,14 @@ class DatabaseManager:
             for cat in income_defaults:
                 cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Income')", (cat,))
 
-            # Settings Defaults
+            # Settings Defaults: Default strictly to False for allow_shorthand
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', '$')")
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('compact_numbers', 'False')")
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('number_format', 'Millions / Billions')")
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_shorthand', 'True')")
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_shorthand', 'False')")
+            
+            # Reset any previously saved 'True' value to 'False' so existing databases use strict numeric mode
+            cursor.execute("UPDATE settings SET value = 'False' WHERE key = 'allow_shorthand' AND value = 'True'")
             conn.commit()
 
     def add_transaction(self, tx_type, date, category, payment_mode, amount, description):
