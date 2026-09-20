@@ -42,7 +42,6 @@ class SidebarView(ctk.CTkFrame):
 
         # Amount Entry with Keystroke Validation
         ctk.CTkLabel(self, text="Amount:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=4, column=0, padx=20, pady=(0, 2), sticky="w")
-        
         vcmd = (self.register(self.validate_amount_keystroke), '%P')
         self.amount_entry = ctk.CTkEntry(
             self, placeholder_text="0.00 (e.g. 50k, 7m, 2cr)",
@@ -112,15 +111,12 @@ class SidebarView(ctk.CTkFrame):
         self.settings_btn.grid(row=18, column=0, padx=20, pady=(0, 20), sticky="ew")
 
     def validate_amount_keystroke(self, new_val):
-        """Restricts characters typed based on allow_shorthand setting."""
         if new_val == "":
             return True
         allow_sh = self.db.get_setting("allow_shorthand", "True") == "True"
         if allow_sh:
-            # Allow digits, dots, and shorthand letters (k, m, cr, lakh, etc.)
             return bool(re.match(r'^[0-9.]*[a-zA-Z\s]*$', new_val))
         else:
-            # Pure numbers only: digits and at most one decimal point
             return bool(re.match(r'^\d*\.?\d*$', new_val))
 
     def on_type_switched(self, selected_type):
@@ -181,8 +177,15 @@ class SidebarView(ctk.CTkFrame):
                 return
 
         self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc)
+        
+        # Tactile button confirmation
+        self.add_btn.configure(text="✔ Added!", fg_color="#10b981")
+        self.after(900, lambda: self.add_btn.configure(text="Log Transaction", fg_color="#6366f1"))
+
         self.amount_entry.delete(0, "end")
         self.desc_entry.delete(0, "end")
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))
-        self.on_add_callback()
+        
+        # Trigger update with animation flag enabled
+        self.on_add_callback(highlight_new=True)
