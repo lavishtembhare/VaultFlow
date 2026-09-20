@@ -1,4 +1,3 @@
-import sys
 import customtkinter as ctk
 from tkinter import messagebox
 
@@ -22,7 +21,6 @@ class VaultFlowApp(ctk.CTk):
         self.db = DatabaseManager()
         self.currency = self.db.get_setting("currency", "$")
 
-        # Graceful exit handler
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.grid_columnconfigure(1, weight=1)
@@ -52,14 +50,17 @@ class VaultFlowApp(ctk.CTk):
         self.analytics_view = AnalyticsView(self.main_content, on_style_change=self.refresh_ui)
         self.analytics_view.grid(row=1, column=0, sticky="nsew", pady=(0, 12))
 
-        # Bottom Transactions List
-        self.history_view = TransactionHistoryView(self.main_content, on_delete_callback=self.delete_record)
+        # Bottom Transactions List with Clear All Callback
+        self.history_view = TransactionHistoryView(
+            self.main_content, 
+            on_delete_callback=self.delete_record,
+            on_clear_all_callback=self.clear_all_records
+        )
         self.history_view.grid(row=2, column=0, sticky="nsew")
 
         self.refresh_ui(highlight_new=False)
 
     def on_close(self):
-        """Clean shutdown: stops the Tk event loop first before destroying widgets."""
         try:
             self.withdraw()
             self.quit()
@@ -86,6 +87,10 @@ class VaultFlowApp(ctk.CTk):
         if messagebox.askyesno("Delete Record", "Are you sure you want to delete this transaction?"):
             self.db.delete_transaction(tx_id)
             self.refresh_ui(highlight_new=False)
+
+    def clear_all_records(self):
+        self.db.clear_all_transactions()
+        self.refresh_ui(highlight_new=False)
 
     def refresh_ui(self, highlight_new=False):
         df = self.db.get_all_transactions()

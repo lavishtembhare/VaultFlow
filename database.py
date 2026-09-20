@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 import pandas as pd
 
 def format_currency_amount(amount, currency="$", format_style="Millions / Billions", compact_enabled=False):
@@ -110,7 +111,7 @@ class DatabaseManager:
                 )
             """)
 
-            # --- Schema Migrations ---
+            # Schema Migrations
             cursor.execute("PRAGMA table_info(transactions)")
             t_cols = [col[1] for col in cursor.fetchall()]
             if "payment_mode" not in t_cols:
@@ -155,7 +156,7 @@ class DatabaseManager:
                     )
                 """)
 
-            # Populate category defaults
+            # Default categories
             expense_defaults = ["Food", "Bills", "Rent", "Shopping", "Transport", "Entertainment", "Healthcare", "Other"]
             for cat in expense_defaults:
                 cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Expense')", (cat,))
@@ -185,6 +186,103 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
             conn.commit()
+
+    def clear_all_transactions(self):
+        """Permanently wipes all transactions from the database."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM transactions")
+            conn.commit()
+
+    def import_transactions_from_dataframe(self, imported_df):
+        """
+        Intelligently maps and imports records from an uploaded Excel or CSV DataFrame.
+        Handles flexible column naming (e.g., VaultFlow exports or generic spreadsheets).
+        """
+        col_map = {}
+        for col in imported_df.columns:
+            clean = str(col).strip().lower().replace("_", " ").replace("-", " ")
+            if "date" in clean or "time" in clean:
+                col_map["date"] = col
+            elif "type" in clean:
+                col_map["type"] = col
+            elif "cat" in clean:
+                col_map["category"] = col
+            elif "acc" in clean or "credit" in clean or "debit" in clean:
+                col_map["account"] = col
+            elif "pay" in clean or "mode" in clean:
+                col_map["payment_mode"] = col
+            elif any(k in clean for k in ["amt", "amount", "price", "cost", "value"]):
+                col_map["amount"] = col
+            elif any(k in clean for k in ["desc", "note", "remark", "detail", "title"]):
+                col_map["description"] = col
+
+        if "amount" not in col_map:
+            raise ValueError("Could not find an 'Amount' column in the uploaded file.")
+
+        imported_count = 0
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for _, row in imported_df.iterrows():
+                try:
+                    # Clean and parse numeric amount
+                    raw_amt = str(row[col_map["amount"]]).replace("$", "").replace("₹", "").replace("€", "").replace("£", "").replace(",", "").strip()
+                    amt = float(raw_amt)
+                    if amt == 0 or pd.isna(amt):
+                        continue
+                except Exception:
+                    continue
+
+                # Determine Type (Expense vs Income)
+                if "type" in col_map and pd.notna(row[col_map["type"]]):
+                    raw_type = str(row[col_map["type"]]).strip().capitalize()
+                    tx_type = "Income" if any(x in raw_type.lower() for x in ["inc", "credit", "+"]) else "Expense"
+                else:
+                    tx_type = "Income" if amt < 0 else "Expense"
+
+                amt = abs(amt)
+
+                # Determine Date
+                date_val = datetime.now().strftime("%Y-%m-%d %H:%M")
+                if "date" in col_map and pd.notna(row[col_map["date"]]):
+                    try:
+                        parsed_dt = pd.to_datetime(row[col_map["date"]])
+                        date_val = parsed_dt.strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        date_val = str(row[col_map["date"]]).strip()
+
+                # Determine Category
+                category = "Other"
+                if "category" in col_map and pd.notna(row[col_map["category"]]):
+                    category = str(row[col_map["category"]]).strip()
+
+                # Determine Account
+                account = "Bank"
+                if "account" in col_map and pd.notna(row[col_map["account"]]):
+                    raw_acc = str(row[col_map["account"]]).replace("📥 In:", "").replace("📤 From:", "").strip()
+                    if raw_acc:
+                        account = raw_acc
+
+                # Determine Payment Mode
+                payment_mode = "UPI"
+                if "payment_mode" in col_map and pd.notna(row[col_map["payment_mode"]]):
+                    payment_mode = str(row[col_map["payment_mode"]]).strip()
+
+                # Determine Description
+                desc = ""
+                if "description" in col_map and pd.notna(row[col_map["description"]]):
+                    desc = str(row[col_map["description"]]).strip()
+
+                cursor.execute(
+                    "INSERT INTO transactions (type, date, category, payment_mode, account, amount, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (tx_type, date_val, category, payment_mode, account, amt, desc)
+                )
+                cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (category, tx_type))
+                imported_count += 1
+
+            conn.commit()
+
+        return imported_count
 
     def get_all_transactions(self):
         with self.get_connection() as conn:

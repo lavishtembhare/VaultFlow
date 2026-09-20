@@ -1,6 +1,7 @@
 from datetime import datetime
 import customtkinter as ctk
-from tkinter import messagebox
+import pandas as pd
+from tkinter import filedialog, messagebox
 from dialogs import AddCategoryDialog, DateTimePickerDialog, SettingsDialog
 from database import parse_amount
 
@@ -14,7 +15,7 @@ class SidebarView(ctk.CTkFrame):
         self.on_open_settings = on_open_settings
         self._is_updating_amount = False
 
-        self.grid_rowconfigure(18, weight=1)
+        self.grid_rowconfigure(20, weight=1)
 
         # Title Header
         ctk.CTkLabel(self, text="🛡️ VaultFlow", font=ctk.CTkFont(size=22, weight="bold"), text_color="#38bdf8").grid(row=0, column=0, padx=20, pady=(20, 15), sticky="w")
@@ -61,7 +62,7 @@ class SidebarView(ctk.CTkFrame):
         self.category_menu = ctk.CTkOptionMenu(self, values=self.db.get_categories("Expense"), fg_color="#374151")
         self.category_menu.grid(row=7, column=0, padx=20, pady=(0, 10), sticky="ew")
 
-        # Account Field (Dynamic Label: "Money Debited From:" vs "Money Credited In:")
+        # Account Field
         self.account_label = ctk.CTkLabel(self, text="Money Debited From:", font=ctk.CTkFont(size=11), text_color="#9ca3af")
         self.account_label.grid(row=8, column=0, padx=20, pady=(0, 2), sticky="w")
         self.account_menu = ctk.CTkOptionMenu(
@@ -96,7 +97,7 @@ class SidebarView(ctk.CTkFrame):
 
         # Description Entry
         ctk.CTkLabel(self, text="Description:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=14, column=0, padx=20, pady=(0, 2), sticky="w")
-        self.desc_entry = ctk.CTkEntry(self, placeholder_text="e.g. Salary, Rent, Dividends")
+        self.desc_entry = ctk.CTkEntry(self, placeholder_text="e.g. Salary, Rent, Dinner")
         self.desc_entry.grid(row=15, column=0, padx=20, pady=(0, 15), sticky="ew")
 
         # Submit Button
@@ -106,22 +107,29 @@ class SidebarView(ctk.CTkFrame):
             fg_color="#6366f1", hover_color="#4f46e5",
             command=self.submit
         )
-        self.add_btn.grid(row=16, column=0, padx=20, pady=(0, 15), sticky="ew")
+        self.add_btn.grid(row=16, column=0, padx=20, pady=(0, 12), sticky="ew")
 
-        # Utility Buttons
+        # --- ACTION & UTILITY BUTTONS ---
+        self.import_btn = ctk.CTkButton(
+            self, text="📥 Import Excel / CSV", 
+            fg_color="#2563eb", hover_color="#1d4ed8",
+            command=self.import_excel_file
+        )
+        self.import_btn.grid(row=17, column=0, padx=20, pady=(0, 6), sticky="ew")
+
         self.export_btn = ctk.CTkButton(
-            self, text="📥 Filter & Export Excel", 
+            self, text="📤 Filter & Export Excel", 
             fg_color="#10b981", hover_color="#059669",
             command=self.on_open_export
         )
-        self.export_btn.grid(row=19, column=0, padx=20, pady=(0, 8), sticky="ew")
+        self.export_btn.grid(row=18, column=0, padx=20, pady=(0, 6), sticky="ew")
 
         self.settings_btn = ctk.CTkButton(
             self, text="⚙️ Preferences & Categories", 
             fg_color="#374151", hover_color="#4b5563",
             command=self.on_open_settings
         )
-        self.settings_btn.grid(row=20, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.settings_btn.grid(row=19, column=0, padx=20, pady=(0, 6), sticky="ew")
 
     def _filter_keypress(self, event):
         if event.keysym in ("BackSpace", "Delete", "Left", "Right", "Tab", "Home", "End", "Return", "Escape", "Up", "Down"):
@@ -186,7 +194,6 @@ class SidebarView(ctk.CTkFrame):
         if categories:
             self.category_menu.set(categories[0])
 
-        # Dynamic label adaptation
         if selected_type == "Income":
             self.account_label.configure(text="Money Credited In:")
         else:
@@ -260,3 +267,48 @@ class SidebarView(ctk.CTkFrame):
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))
         
         self.on_add_callback(highlight_new=True)
+
+    def import_excel_file(self):
+        """Opens file dialog and imports transactions from Excel or CSV."""
+        file_path = filedialog.askopenfilename(
+            title="Select Excel or CSV Spreadsheet to Import",
+            filetypes=[
+                ("Spreadsheet Files", "*.xlsx *.xls *.csv"),
+                ("Excel Files", "*.xlsx *.xls"),
+                ("CSV Files", "*.csv")
+            ]
+        )
+        if not file_path:
+            return
+
+        try:
+            if file_path.lower().endswith(".csv"):
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
+
+            if df.empty:
+                messagebox.showwarning("Import Warning", "The selected file contains no rows.")
+                return
+
+            imported_count = self.db.import_transactions_from_dataframe(df)
+            messagebox.showinfo(
+                "Import Complete",
+                f"Successfully imported {imported_count} transactions into VaultFlow!\n\nSource: {file_path}"
+            )
+            self.refresh_categories()
+            self.on_add_callback(highlight_new=True)
+
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Failed to import file:\n{str(e)}")
+
+    def clear_all_records(self):
+        """Prompts confirmation and clears all transaction data."""
+        confirm = messagebox.askyesno(
+            "Confirm Clear All",
+            "⚠️ Are you sure you want to delete ALL logged transactions?\n\nThis will permanently reset your balance and charts to zero. This action cannot be undone."
+        )
+        if confirm:
+            self.db.clear_all_transactions()
+            messagebox.showinfo("VaultFlow Reset", "All transactions have been deleted successfully.")
+            self.on_add_callback(highlight_new=False)
