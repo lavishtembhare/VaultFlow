@@ -31,6 +31,7 @@ class AddCategoryDialog(ctk.CTkToplevel):
         self.on_success()
         self.destroy()
 
+
 class ExportFilterDialog(ctk.CTkToplevel):
     def __init__(self, parent, db, currency: str):
         super().__init__(parent)
@@ -131,9 +132,18 @@ class ExportFilterDialog(ctk.CTkToplevel):
         )
         if file_path:
             try:
+                # Rename columns for Excel presentation
+                export_df = df.rename(columns={
+                    "date": "Date",
+                    "type": "Transaction Type",
+                    "category": "Category",
+                    "payment_mode": "Payment Mode",
+                    "amount": f"Amount ({self.currency})",
+                    "description": "Description"
+                })
                 with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
-                    df.to_excel(writer, index=False, sheet_name="Transactions")
-                messagebox.showinfo("Success", f"Report exported successfully!\n\nTotal records: {len(df)}")
+                    export_df.to_excel(writer, index=False, sheet_name="Transactions")
+                messagebox.showinfo("Success", f"Report exported successfully!\n\nTotal records: {len(export_df)}")
                 self.destroy()
             except Exception as e:
                 messagebox.showerror("Export Failed", str(e))

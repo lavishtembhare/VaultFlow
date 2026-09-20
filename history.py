@@ -18,10 +18,12 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
             is_income = row["type"] == "Income"
             accent_color = "#10b981" if is_income else "#ef4444"
             sign = "+" if is_income else "-"
+            pm = row.get("payment_mode", "UPI") if pd.notna(row.get("payment_mode")) else "UPI"
 
             row_card = ctk.CTkFrame(self, fg_color="#111827", corner_radius=8)
             row_card.pack(fill="x", pady=4, padx=5)
 
+            # Left side: description and metadata
             left_col = ctk.CTkFrame(row_card, fg_color="transparent")
             left_col.pack(side="left", padx=12, pady=8)
 
@@ -34,11 +36,12 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
 
             ctk.CTkLabel(
                 left_col, 
-                text=f"{row['date']}  ?  {row['category']}", 
+                text=f"{row['date']}  •  {row['category']}  •  💳 {pm}", 
                 font=ctk.CTkFont(size=11), 
                 text_color="#9ca3af"
             ).pack(anchor="w")
 
+            # Right side: amount and delete button
             right_col = ctk.CTkFrame(row_card, fg_color="transparent")
             right_col.pack(side="right", padx=12, pady=8)
 
@@ -50,7 +53,7 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
             ).pack(side="left", padx=10)
 
             del_btn = ctk.CTkButton(
-                right_col, text="?", width=26, height=26, 
+                right_col, text="✕", width=26, height=26, 
                 fg_color="#374151", hover_color="#ef4444", 
                 command=lambda tid=row["id"]: self.on_delete_callback(tid)
             )

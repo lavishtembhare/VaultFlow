@@ -13,40 +13,49 @@ class DatabaseManager:
     def init_db(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS transactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     type TEXT NOT NULL,
                     date TEXT NOT NULL,
                     category TEXT NOT NULL,
+                    payment_mode TEXT NOT NULL DEFAULT 'UPI',
                     amount REAL NOT NULL,
                     description TEXT
                 )
-            ''')
-            cursor.execute('''
+            """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS categories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL
                 )
-            ''')
-            cursor.execute('''
+            """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 )
-            ''')
+            """)
+
+            # Auto-migrate existing database if payment_mode doesn't exist
+            cursor.execute("PRAGMA table_info(transactions)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if "payment_mode" not in columns:
+                cursor.execute("ALTER TABLE transactions ADD COLUMN payment_mode TEXT DEFAULT 'UPI'")
+
+            # Default categories
             defaults = ["Food", "Rent", "Shopping", "Transport", "Bills", "Salary", "Investment", "Other"]
             for cat in defaults:
                 cursor.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (cat,))
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', '$')")
             conn.commit()
 
-    def add_transaction(self, tx_type, date, category, amount, description):
+    def add_transaction(self, tx_type, date, category, payment_mode, amount, description):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (type, date, category, amount, description) VALUES (?, ?, ?, ?, ?)",
-                (tx_type, date, category, amount, description)
+                "INSERT INTO transactions (type, date, category, payment_mode, amount, description) VALUES (?, ?, ?, ?, ?, ?)",
+                (tx_type, date, category, payment_mode, amount, description)
             )
             conn.commit()
 
@@ -62,12 +71,12 @@ class DatabaseManager:
 
     def get_filtered_transactions(self, start_date, end_date):
         with self.get_connection() as conn:
-            query = '''
-                SELECT date, type, category, amount, description 
+            query = """
+                SELECT date, type, category, payment_mode, amount, description 
                 FROM transactions 
                 WHERE date BETWEEN ? AND ? 
                 ORDER BY date ASC
-            '''
+            """
             return pd.read_sql_query(query, conn, params=(start_date, end_date))
 
     def get_categories(self):
