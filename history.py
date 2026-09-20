@@ -1,18 +1,22 @@
 import customtkinter as ctk
 import pandas as pd
+from database import format_currency_amount
 
 class TransactionHistoryView(ctk.CTkScrollableFrame):
     def __init__(self, parent, on_delete_callback):
         super().__init__(parent, label_text="Transaction Records", corner_radius=12, fg_color="#1f2937")
         self.on_delete_callback = on_delete_callback
 
-    def render_list(self, df: pd.DataFrame, currency: str):
+    def render_list(self, df: pd.DataFrame, currency: str, db):
         for widget in self.winfo_children():
             widget.destroy()
 
         if df.empty:
             ctk.CTkLabel(self, text="No transactions recorded yet.", text_color="#6b7280").pack(pady=30)
             return
+
+        compact_enabled = db.get_setting("compact_numbers", "False") == "True"
+        format_style = db.get_setting("number_format", "Millions / Billions")
 
         for _, row in df.iterrows():
             is_income = row["type"] == "Income"
@@ -23,7 +27,6 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
             row_card = ctk.CTkFrame(self, fg_color="#111827", corner_radius=8)
             row_card.pack(fill="x", pady=4, padx=5)
 
-            # Left side: description and metadata
             left_col = ctk.CTkFrame(row_card, fg_color="transparent")
             left_col.pack(side="left", padx=12, pady=8)
 
@@ -41,13 +44,13 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
                 text_color="#9ca3af"
             ).pack(anchor="w")
 
-            # Right side: amount and delete button
             right_col = ctk.CTkFrame(row_card, fg_color="transparent")
             right_col.pack(side="right", padx=12, pady=8)
 
+            amt_formatted = format_currency_amount(row['amount'], currency, format_style, compact_enabled)
             ctk.CTkLabel(
                 right_col, 
-                text=f"{sign}{currency}{row['amount']:,.2f}", 
+                text=f"{sign}{amt_formatted}", 
                 font=ctk.CTkFont(size=14, weight="bold"), 
                 text_color=accent_color
             ).pack(side="left", padx=10)

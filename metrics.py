@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import pandas as pd
+from database import format_currency_amount
 
 class MetricCardsView(ctk.CTkFrame):
     def __init__(self, parent):
@@ -22,11 +23,15 @@ class MetricCardsView(ctk.CTkFrame):
         lbl_val.pack(anchor="w", padx=16, pady=(0, 12))
         return lbl_val
 
-    def update_metrics(self, df: pd.DataFrame, currency: str):
+    def update_metrics(self, df: pd.DataFrame, currency: str, db):
+        compact_enabled = db.get_setting("compact_numbers", "False") == "True"
+        format_style = db.get_setting("number_format", "Millions / Billions")
+
         if df.empty:
-            self.income_card.configure(text=f"{currency}0.00")
-            self.expense_card.configure(text=f"{currency}0.00")
-            self.savings_card.configure(text=f"{currency}0.00")
+            zero_str = format_currency_amount(0.0, currency, format_style, compact_enabled)
+            self.income_card.configure(text=zero_str)
+            self.expense_card.configure(text=zero_str)
+            self.savings_card.configure(text=zero_str)
             self.count_card.configure(text="0")
             return
 
@@ -34,7 +39,7 @@ class MetricCardsView(ctk.CTkFrame):
         total_expense = df[df["type"] == "Expense"]["amount"].sum()
         balance = total_income - total_expense
 
-        self.income_card.configure(text=f"{currency}{total_income:,.2f}")
-        self.expense_card.configure(text=f"{currency}{total_expense:,.2f}")
-        self.savings_card.configure(text=f"{currency}{balance:,.2f}")
+        self.income_card.configure(text=format_currency_amount(total_income, currency, format_style, compact_enabled))
+        self.expense_card.configure(text=format_currency_amount(total_expense, currency, format_style, compact_enabled))
+        self.savings_card.configure(text=format_currency_amount(balance, currency, format_style, compact_enabled))
         self.count_card.configure(text=str(len(df)))

@@ -1,6 +1,84 @@
 import sqlite3
 import pandas as pd
 
+def format_currency_amount(amount, currency="$", format_style="Millions / Billions", compact_enabled=False):
+    """Formats numeric values into Standard, Millions, or Lakhs/Crores notations."""
+    if not compact_enabled or format_style == "Standard":
+        return f"{currency}{amount:,.2f}"
+
+    abs_amt = abs(amount)
+    sign = "-" if amount < 0 else ""
+
+    if format_style == "Millions / Billions":
+        if abs_amt >= 1_000_000_000:
+            return f"{sign}{currency}{abs_amt / 1_000_000_000:.2f}B"
+        elif abs_amt >= 1_000_000:
+            return f"{sign}{currency}{abs_amt / 1_000_000:.2f}M"
+        elif abs_amt >= 1_000:
+            return f"{sign}{currency}{abs_amt / 1_000:.2f}K"
+        else:
+            return f"{sign}{currency}{abs_amt:,.2f}"
+
+    elif format_style == "Lakhs / Crores":
+        if abs_amt >= 10_000_000:  # 1 Crore = 10,000,000
+            return f"{sign}{currency}{abs_amt / 10_000_000:.2f} Cr"
+        elif abs_amt >= 100_000:   # 1 Lakh = 100,000
+            return f"{sign}{currency}{abs_amt / 100_000:.2f} Lakh"
+        elif abs_amt >= 1_000:
+            return f"{sign}{currency}{abs_amt / 1_000:.2f} K"
+        else:
+            return f"{sign}{currency}{abs_amt:,.2f}"
+
+    return f"{currency}{amount:,.2f}"
+
+
+def parse_amount(amt_str, allow_shorthand=True):
+    """Parses standard numbers and shorthand suffixes (e.g. 5k, 7m, 2cr, 10lakh)."""
+    amt_str = amt_str.strip().lower().replace(",", "")
+    if not amt_str:
+        raise ValueError("Please enter an amount.")
+
+    if allow_shorthand:
+        multipliers = {
+            'crores': 10_000_000,
+            'crore': 10_000_000,
+            'cr': 10_000_000,
+            'billions': 1_000_000_000,
+            'billion': 1_000_000_000,
+            'b': 1_000_000_000,
+            'millions': 1_000_000,
+            'million': 1_000_000,
+            'm': 1_000_000,
+            'lakhs': 100_000,
+            'lakh': 100_000,
+            'lacs': 100_000,
+            'lac': 100_000,
+            'l': 100_000,
+            'thousands': 1_000,
+            'thousand': 1_000,
+            'k': 1_000
+        }
+        for suffix, mult in sorted(multipliers.items(), key=lambda x: -len(x[0])):
+            if amt_str.endswith(suffix):
+                num_part = amt_str[:-len(suffix)].strip()
+                try:
+                    val = float(num_part) * mult
+                except ValueError:
+                    raise ValueError(f"Invalid numeric input before '{suffix}': {num_part}")
+                if val <= 0:
+                    raise ValueError("Amount must be greater than zero.")
+                return val
+
+    try:
+        val = float(amt_str)
+    except ValueError:
+        raise ValueError("Invalid number. Enter numeric digits (or enable shorthand like 5k, 7m, 2cr in Settings).")
+
+    if val <= 0:
+        raise ValueError("Amount must be greater than zero.")
+    return val
+
+
 class DatabaseManager:
     """Handles SQLite storage for transactions, categories, and settings."""
     def __init__(self, db_path="vaultflow.db"):
@@ -25,43 +103,63 @@ class DatabaseManager:
                 )
             """)
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS categories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    type TEXT NOT NULL DEFAULT 'Expense',
-                    UNIQUE(name, type)
-                )
-            """)
-            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 )
             """)
 
-            # Migration: Ensure payment_mode exists
-            cursor.execute("PRAGMA table_info(transactions)")
-            t_cols = [col[1] for col in cursor.fetchall()]
-            if "payment_mode" not in t_cols:
-                cursor.execute("ALTER TABLE transactions ADD COLUMN payment_mode TEXT DEFAULT 'UPI'")
+            # Fix categories schema: Rebuild if old single-column UNIQUE(name) exists
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'")
+            cat_meta = cursor.fetchone()
+            if cat_meta:
+                sql = cat_meta[0]
+                if "name TEXT UNIQUE" in sql or "UNIQUE (name)" in sql or "UNIQUE(name)" in sql:
+                    cursor.execute("PRAGMA table_info(categories)")
+                    cols = [c[1] for c in cursor.fetchall()]
+                    has_type = "type" in cols
+                    if has_type:
+                        cursor.execute("SELECT name, type FROM categories")
+                        existing_cats = cursor.fetchall()
+                    else:
+                        cursor.execute("SELECT name FROM categories")
+                        existing_cats = [(r[0], 'Expense') for r in cursor.fetchall()]
 
-            # Migration: Ensure type exists in categories
-            cursor.execute("PRAGMA table_info(categories)")
-            c_cols = [col[1] for col in cursor.fetchall()]
-            if "type" not in c_cols:
-                cursor.execute("ALTER TABLE categories ADD COLUMN type TEXT DEFAULT 'Expense'")
+                    cursor.execute("DROP TABLE categories")
+                    cursor.execute("""
+                        CREATE TABLE categories (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL,
+                            type TEXT NOT NULL DEFAULT 'Expense',
+                            UNIQUE(name, type)
+                        )
+                    """)
+                    for name, c_type in existing_cats:
+                        cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (name, c_type))
+            else:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS categories (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'Expense',
+                        UNIQUE(name, type)
+                    )
+                """)
 
-            # Default Expense Categories
+            # Populate defaults
             expense_defaults = ["Food", "Bills", "Rent", "Shopping", "Transport", "Entertainment", "Healthcare", "Other"]
             for cat in expense_defaults:
                 cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Expense')", (cat,))
 
-            # Default Income Categories
             income_defaults = ["Salary", "Rent Received", "Freelance", "Revenue", "Investment", "Bonus", "Other"]
             for cat in income_defaults:
                 cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Income')", (cat,))
 
+            # Settings Defaults
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', '$')")
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('compact_numbers', 'False')")
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('number_format', 'Millions / Billions')")
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_shorthand', 'True')")
             conn.commit()
 
     def add_transaction(self, tx_type, date, category, payment_mode, amount, description):
@@ -104,6 +202,12 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (name.strip(), tx_type))
+            conn.commit()
+
+    def delete_category(self, name, tx_type="Expense"):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM categories WHERE name = ? AND type = ?", (name.strip(), tx_type))
             conn.commit()
 
     def get_setting(self, key, default=""):

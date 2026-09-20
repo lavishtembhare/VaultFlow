@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 from database import DatabaseManager
-from dialogs import ExportFilterDialog
+from dialogs import ExportFilterDialog, SettingsDialog
 from metrics import MetricCardsView
 from analytics import AnalyticsView
 from history import TransactionHistoryView
@@ -15,7 +15,7 @@ class VaultFlowApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("VaultFlow - Personal Finance & Expense Suite")
-        self.geometry("1180x740")
+        self.geometry("1180x750")
         self.minsize(1020, 680)
 
         self.db = DatabaseManager()
@@ -29,7 +29,8 @@ class VaultFlowApp(ctk.CTk):
             self, self.db,
             on_add_callback=self.refresh_ui,
             on_currency_change=self.handle_currency_change,
-            on_open_export=self.open_export_dialog
+            on_open_export=self.open_export_dialog,
+            on_open_settings=self.open_settings_dialog
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
 
@@ -60,6 +61,14 @@ class VaultFlowApp(ctk.CTk):
     def open_export_dialog(self):
         ExportFilterDialog(self, self.db, self.currency)
 
+    def open_settings_dialog(self):
+        SettingsDialog(self, self.db, on_settings_changed=self.on_settings_updated)
+
+    def on_settings_updated(self):
+        self.currency = self.db.get_setting("currency", "$")
+        self.sidebar.refresh_categories()
+        self.refresh_ui()
+
     def delete_record(self, tx_id):
         if messagebox.askyesno("Delete Record", "Are you sure you want to delete this transaction?"):
             self.db.delete_transaction(tx_id)
@@ -67,9 +76,9 @@ class VaultFlowApp(ctk.CTk):
 
     def refresh_ui(self):
         df = self.db.get_all_transactions()
-        self.metrics_view.update_metrics(df, self.currency)
+        self.metrics_view.update_metrics(df, self.currency, self.db)
         self.analytics_view.render_charts(df, self.currency)
-        self.history_view.render_list(df, self.currency)
+        self.history_view.render_list(df, self.currency, self.db)
 
 if __name__ == "__main__":
     app = VaultFlowApp()

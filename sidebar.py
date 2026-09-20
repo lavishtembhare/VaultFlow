@@ -1,19 +1,22 @@
 from datetime import datetime
+import re
 import customtkinter as ctk
 from tkinter import messagebox
-from dialogs import AddCategoryDialog, DateTimePickerDialog
+from dialogs import AddCategoryDialog, DateTimePickerDialog, SettingsDialog
+from database import parse_amount
 
 class SidebarView(ctk.CTkFrame):
-    def __init__(self, parent, db, on_add_callback, on_currency_change, on_open_export):
+    def __init__(self, parent, db, on_add_callback, on_currency_change, on_open_export, on_open_settings):
         super().__init__(parent, width=280, corner_radius=0, fg_color="#111827")
         self.db = db
         self.on_add_callback = on_add_callback
         self.on_currency_change = on_currency_change
         self.on_open_export = on_open_export
+        self.on_open_settings = on_open_settings
 
-        self.grid_rowconfigure(15, weight=1)
+        self.grid_rowconfigure(16, weight=1)
 
-        # Title
+        # Title Header
         ctk.CTkLabel(self, text="🛡️ VaultFlow", font=ctk.CTkFont(size=22, weight="bold"), text_color="#38bdf8").grid(row=0, column=0, padx=20, pady=(20, 15), sticky="w")
 
         # Currency Selection
@@ -37,12 +40,17 @@ class SidebarView(ctk.CTkFrame):
         self.type_toggle.set("Expense")
         self.type_toggle.grid(row=3, column=0, padx=20, pady=(0, 12), sticky="ew")
 
-        # Amount Entry
+        # Amount Entry with Keystroke Validation
         ctk.CTkLabel(self, text="Amount:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=4, column=0, padx=20, pady=(0, 2), sticky="w")
-        self.amount_entry = ctk.CTkEntry(self, placeholder_text="0.00")
+        
+        vcmd = (self.register(self.validate_amount_keystroke), '%P')
+        self.amount_entry = ctk.CTkEntry(
+            self, placeholder_text="0.00 (e.g. 50k, 7m, 2cr)",
+            validate="key", validatecommand=vcmd
+        )
         self.amount_entry.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
 
-        # Category Row (Dropdown + "+" button)
+        # Category Row
         cat_header = ctk.CTkFrame(self, fg_color="transparent")
         cat_header.grid(row=6, column=0, padx=20, pady=(0, 2), sticky="ew")
         self.cat_title_lbl = ctk.CTkLabel(cat_header, text="Expense Category:", font=ctk.CTkFont(size=11), text_color="#9ca3af")
@@ -62,7 +70,7 @@ class SidebarView(ctk.CTkFrame):
         self.payment_menu.set("UPI")
         self.payment_menu.grid(row=9, column=0, padx=20, pady=(0, 10), sticky="ew")
 
-        # Date & Time Row with Calendar Picker Button
+        # Date & Time Row
         ctk.CTkLabel(self, text="Date & Time (YYYY-MM-DD HH:MM):", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=10, column=0, padx=20, pady=(0, 2), sticky="w")
         dt_frame = ctk.CTkFrame(self, fg_color="transparent")
         dt_frame.grid(row=11, column=0, padx=20, pady=(0, 10), sticky="ew")
@@ -88,13 +96,32 @@ class SidebarView(ctk.CTkFrame):
         )
         self.add_btn.grid(row=14, column=0, padx=20, pady=(0, 15), sticky="ew")
 
-        # Export Button
+        # Utility Buttons (Export & Settings)
         self.export_btn = ctk.CTkButton(
             self, text="📥 Filter & Export Excel", 
             fg_color="#10b981", hover_color="#059669",
             command=self.on_open_export
         )
-        self.export_btn.grid(row=16, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.export_btn.grid(row=17, column=0, padx=20, pady=(0, 8), sticky="ew")
+
+        self.settings_btn = ctk.CTkButton(
+            self, text="⚙️ Preferences & Categories", 
+            fg_color="#374151", hover_color="#4b5563",
+            command=self.on_open_settings
+        )
+        self.settings_btn.grid(row=18, column=0, padx=20, pady=(0, 20), sticky="ew")
+
+    def validate_amount_keystroke(self, new_val):
+        """Restricts characters typed based on allow_shorthand setting."""
+        if new_val == "":
+            return True
+        allow_sh = self.db.get_setting("allow_shorthand", "True") == "True"
+        if allow_sh:
+            # Allow digits, dots, and shorthand letters (k, m, cr, lakh, etc.)
+            return bool(re.match(r'^[0-9.]*[a-zA-Z\s]*$', new_val))
+        else:
+            # Pure numbers only: digits and at most one decimal point
+            return bool(re.match(r'^\d*\.?\d*$', new_val))
 
     def on_type_switched(self, selected_type):
         self.cat_title_lbl.configure(text=f"{selected_type} Category:")
@@ -136,24 +163,21 @@ class SidebarView(ctk.CTkFrame):
         payment_mode = self.payment_menu.get()
         tx_type = self.type_toggle.get()
 
+        allow_sh = self.db.get_setting("allow_shorthand", "True") == "True"
         try:
-            amt = float(amt_str)
-            if amt <= 0:
-                raise ValueError
-        except ValueError:
-            messagebox.showerror("Validation Error", "Amount must be a positive number.")
+            amt = parse_amount(amt_str, allow_shorthand=allow_sh)
+        except ValueError as e:
+            messagebox.showerror("Validation Error", str(e))
             return
 
-        # Validate date and time
         try:
             datetime.strptime(date_str, "%Y-%m-%d %H:%M")
         except ValueError:
             try:
-                # If user typed date without time, append current time
                 datetime.strptime(date_str, "%Y-%m-%d")
                 date_str += " " + datetime.now().strftime("%H:%M")
             except ValueError:
-                messagebox.showerror("Validation Error", "Date format must be YYYY-MM-DD HH:MM (use the 📅 button).")
+                messagebox.showerror("Validation Error", "Date format must be YYYY-MM-DD HH:MM (use 📅).")
                 return
 
         self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc)
