@@ -178,14 +178,19 @@ class SidebarView(ctk.CTkFrame):
 
         self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc)
         
-        # Tactile button confirmation
+        # Tactile button confirmation with widget check
         self.add_btn.configure(text="✔ Added!", fg_color="#10b981")
-        self.after(900, lambda: self.add_btn.configure(text="Log Transaction", fg_color="#6366f1"))
+        def reset_btn():
+            try:
+                if self.winfo_exists():
+                    self.add_btn.configure(text="Log Transaction", fg_color="#6366f1")
+            except Exception:
+                pass
+        self.after(800, reset_btn)
 
         self.amount_entry.delete(0, "end")
         self.desc_entry.delete(0, "end")
         self.date_entry.delete(0, "end")
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))
         
-        # Trigger update with animation flag enabled
         self.on_add_callback(highlight_new=True)

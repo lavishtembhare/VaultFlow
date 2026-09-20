@@ -6,13 +6,28 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
     def __init__(self, parent, on_delete_callback):
         super().__init__(parent, label_text="Transaction Records", corner_radius=12, fg_color="#1f2937")
         self.on_delete_callback = on_delete_callback
+        self.row_cards = []
+        self.empty_lbl = None
 
     def render_list(self, df: pd.DataFrame, currency: str, db, highlight_new=False):
-        for widget in self.winfo_children():
-            widget.destroy()
+        # Safely destroy ONLY user transaction rows, never internal canvas/scrollbar
+        for card in self.row_cards:
+            try:
+                card.destroy()
+            except Exception:
+                pass
+        self.row_cards.clear()
 
-        if df.empty:
-            ctk.CTkLabel(self, text="No transactions recorded yet.", text_color="#6b7280").pack(pady=30)
+        if self.empty_lbl:
+            try:
+                self.empty_lbl.destroy()
+            except Exception:
+                pass
+            self.empty_lbl = None
+
+        if df is None or df.empty:
+            self.empty_lbl = ctk.CTkLabel(self, text="No transactions recorded yet.", text_color="#6b7280")
+            self.empty_lbl.pack(pady=30)
             return
 
         compact_enabled = db.get_setting("compact_numbers", "False") == "True"
@@ -25,7 +40,6 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
             sign = "+" if is_income else "-"
             pm = row.get("payment_mode", "UPI") if pd.notna(row.get("payment_mode")) else "UPI"
 
-            # If newest item: give it a glowing reaction color
             card_bg = "#064e3b" if (is_newest and is_income) else ("#7f1d1d" if (is_newest and not is_income) else "#111827")
 
             row_card = ctk.CTkFrame(
@@ -36,8 +50,9 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
                 corner_radius=8
             )
             row_card.pack(fill="x", pady=4, padx=5)
+            self.row_cards.append(row_card)
 
-            # Left Info
+            # Left Col
             left_col = ctk.CTkFrame(row_card, fg_color="transparent")
             left_col.pack(side="left", padx=12, pady=8)
 
@@ -58,7 +73,7 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
                 text_color="#9ca3af"
             ).pack(anchor="w")
 
-            # Right Info
+            # Right Col
             right_col = ctk.CTkFrame(row_card, fg_color="transparent")
             right_col.pack(side="right", padx=12, pady=8)
 
@@ -77,6 +92,11 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
             )
             del_btn.pack(side="left")
 
-            # Fade newly added row to standard background after 1.5 seconds
             if is_newest:
-                self.after(1500, lambda card=row_card: card.configure(fg_color="#111827", border_width=0))
+                def fade_back(c=row_card):
+                    try:
+                        if c.winfo_exists():
+                            c.configure(fg_color="#111827", border_width=0)
+                    except Exception:
+                        pass
+                self.after(1400, fade_back)

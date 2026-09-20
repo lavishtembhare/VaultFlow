@@ -12,6 +12,7 @@ class SettingsDialog(ctk.CTkToplevel):
         super().__init__(parent)
         self.db = db
         self.on_settings_changed = on_settings_changed
+        self.cat_row_widgets = []
 
         self.title("VaultFlow Preferences & Category Manager")
         self.geometry("480x550")
@@ -20,7 +21,6 @@ class SettingsDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text="⚙️ Preferences & Category Manager", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(15, 10))
 
-        # Tabs for Configuration and Category Management
         self.tabview = ctk.CTkTabview(self, width=440, height=440)
         self.tabview.pack(padx=20, pady=(0, 15), fill="both", expand=True)
 
@@ -31,7 +31,6 @@ class SettingsDialog(ctk.CTkToplevel):
         self.setup_category_manager()
 
     def setup_display_settings(self):
-        # 1. Compact Number Toggle
         ctk.CTkLabel(self.tab_display, text="Number Display Format:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", pady=(10, 4))
         
         compact_val = self.db.get_setting("compact_numbers", "False") == "True"
@@ -43,7 +42,6 @@ class SettingsDialog(ctk.CTkToplevel):
             self.compact_switch.select()
         self.compact_switch.pack(anchor="w", pady=(0, 15))
 
-        # 2. Compact Style Dropdown
         ctk.CTkLabel(self.tab_display, text="Notation Style (When Enabled):", font=ctk.CTkFont(size=12)).pack(anchor="w", pady=(0, 2))
         saved_fmt = self.db.get_setting("number_format", "Millions / Billions")
         self.format_menu = ctk.CTkOptionMenu(
@@ -54,7 +52,6 @@ class SettingsDialog(ctk.CTkToplevel):
         self.format_menu.set(saved_fmt)
         self.format_menu.pack(fill="x", pady=(0, 20))
 
-        # 3. Shorthand Input Setting
         ctk.CTkLabel(self.tab_display, text="Amount Field Behavior:", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", pady=(5, 4))
         shorthand_val = self.db.get_setting("allow_shorthand", "True") == "True"
         self.shorthand_switch = ctk.CTkSwitch(
@@ -77,7 +74,6 @@ class SettingsDialog(ctk.CTkToplevel):
         self.on_settings_changed()
 
     def setup_category_manager(self):
-        # Toggle between Expense and Income Categories
         self.cat_type_toggle = ctk.CTkSegmentedButton(
             self.tab_categories, 
             values=["Expense Categories", "Income Categories"],
@@ -86,14 +82,12 @@ class SettingsDialog(ctk.CTkToplevel):
         self.cat_type_toggle.set("Expense Categories")
         self.cat_type_toggle.pack(fill="x", pady=(5, 10))
 
-        # Add New Category row
         add_box = ctk.CTkFrame(self.tab_categories, fg_color="transparent")
         add_box.pack(fill="x", pady=(0, 10))
         self.new_cat_entry = ctk.CTkEntry(add_box, placeholder_text="New Category Name...")
         self.new_cat_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
         ctk.CTkButton(add_box, text="+ Add", width=70, fg_color="#2eb872", hover_color="#24935b", command=self.add_category_inline).pack(side="right")
 
-        # Scrollable list of categories
         self.cat_scroll = ctk.CTkScrollableFrame(self.tab_categories, height=210, corner_radius=8, fg_color="#111827")
         self.cat_scroll.pack(fill="both", expand=True)
 
@@ -103,19 +97,27 @@ class SettingsDialog(ctk.CTkToplevel):
         return "Expense" if self.cat_type_toggle.get() == "Expense Categories" else "Income"
 
     def load_categories_list(self, _=None):
-        for widget in self.cat_scroll.winfo_children():
-            widget.destroy()
+        # Safely destroy tracked widgets only
+        for widget in self.cat_row_widgets:
+            try:
+                widget.destroy()
+            except Exception:
+                pass
+        self.cat_row_widgets.clear()
 
         active_type = self.get_active_type()
         categories = self.db.get_categories(active_type)
 
         if not categories:
-            ctk.CTkLabel(self.cat_scroll, text="No categories found.", text_color="#6b7280").pack(pady=20)
+            lbl = ctk.CTkLabel(self.cat_scroll, text="No categories found.", text_color="#6b7280")
+            lbl.pack(pady=20)
+            self.cat_row_widgets.append(lbl)
             return
 
         for cat in categories:
             row = ctk.CTkFrame(self.cat_scroll, fg_color="#1f2937", corner_radius=6)
             row.pack(fill="x", pady=3, padx=5)
+            self.cat_row_widgets.append(row)
 
             ctk.CTkLabel(row, text=cat, font=ctk.CTkFont(size=12, weight="bold"), text_color="#f3f4f6").pack(side="left", padx=12, pady=6)
             
@@ -152,7 +154,7 @@ class SettingsDialog(ctk.CTkToplevel):
 
 
 # =====================================================================
-# 2. QUICK ADD CATEGORY DIALOG (Used from sidebar button)
+# 2. QUICK ADD CATEGORY DIALOG
 # =====================================================================
 class AddCategoryDialog(ctk.CTkToplevel):
     def __init__(self, parent, db, tx_type, on_success):
@@ -167,11 +169,7 @@ class AddCategoryDialog(ctk.CTkToplevel):
         self.grab_set()
 
         ctk.CTkLabel(self, text=f"New {self.tx_type} Category:", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(25, 10))
-
-        self.entry = ctk.CTkEntry(
-            self, width=250, 
-            placeholder_text="e.g. Salary, Consulting" if self.tx_type == "Income" else "e.g. Rent, Grocery"
-        )
+        self.entry = ctk.CTkEntry(self, width=250, placeholder_text="Category name...")
         self.entry.pack(pady=5)
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -190,7 +188,7 @@ class AddCategoryDialog(ctk.CTkToplevel):
 
 
 # =====================================================================
-# 3. NATIVE CALENDAR & TIME PICKER POPUP
+# 3. DATE-TIME PICKER DIALOG
 # =====================================================================
 class DateTimePickerDialog(ctk.CTkToplevel):
     def __init__(self, parent, initial_datetime=None, include_time=True, on_select=None):
@@ -327,7 +325,7 @@ class DateTimePickerDialog(ctk.CTkToplevel):
 
 
 # =====================================================================
-# 4. ADVANCED EXCEL EXPORT DIALOG
+# 4. EXCEL EXPORT DIALOG
 # =====================================================================
 class ExportFilterDialog(ctk.CTkToplevel):
     def __init__(self, parent, db, currency: str):
