@@ -6,7 +6,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AnalyticsView(ctk.CTkFrame):
     def __init__(self, parent, on_style_change=None):
         super().__init__(parent, corner_radius=12, fg_color="#1f2937")
-        self.view_mode = "Expenses"  # "Expenses", "Incomes", or "Payment Modes"
+        self.view_mode = "Expenses"  # "Expenses", "Incomes", "Accounts", or "Payment Modes"
         self.pie_type = "Donut"
         self.on_style_change = on_style_change
 
@@ -17,7 +17,7 @@ class AnalyticsView(ctk.CTkFrame):
         # Mode Selector
         self.mode_toggle = ctk.CTkSegmentedButton(
             top_bar,
-            values=["Expenses", "Incomes", "Payment Modes"],
+            values=["Expenses", "Incomes", "Accounts", "Payment Modes"],
             command=self.change_view_mode,
             selected_color="#6366f1"
         )
@@ -60,13 +60,11 @@ class AnalyticsView(ctk.CTkFrame):
             self.on_style_change()
 
     def render_charts(self, df: pd.DataFrame, currency: str, animate=False):
-        # Clear axes
         self.ax_left.clear()
         self.ax_right.clear()
         self.ax_left.set_facecolor('#1f2937')
         self.ax_right.set_facecolor('#1f2937')
 
-        # Validate input
         if df is None or not isinstance(df, pd.DataFrame) or df.empty:
             self.show_empty_message("No transactions logged yet.")
             return
@@ -77,8 +75,27 @@ class AnalyticsView(ctk.CTkFrame):
 
         palette = ["#38bdf8", "#818cf8", "#c084fc", "#f472b6", "#fb7185", "#fbbf24", "#34d399", "#2dd4bf"]
 
-        # Data extraction per view mode
-        if self.view_mode == "Payment Modes":
+        # --- ACCOUNTS BREAKDOWN (Bank, Cash, Portfolio) ---
+        if self.view_mode == "Accounts":
+            acc_series = clean_df["account"] if "account" in clean_df.columns else pd.Series(["Bank"] * len(clean_df))
+            acc_totals = clean_df.groupby(acc_series)["amount"].sum().sort_values(ascending=True)
+
+            if acc_totals.empty or acc_totals.sum() <= 0:
+                self.show_empty_message("No account volume data available.")
+                return
+
+            top_acc = acc_totals.idxmax()
+            self.highlight_lbl.configure(text=f"⭐ Primary: {top_acc} ({currency}{acc_totals.max():,.0f})")
+
+            bar_data = acc_totals
+            pie_data = acc_totals
+            bar_title = f"Account Volume ({currency})"
+            pie_title = f"Account Share ({self.pie_type})"
+            bar_colors = ["#38bdf8" if a != top_acc else "#10b981" for a in bar_data.index]
+            is_currency_bar = True
+
+        # --- PAYMENT MODES VIEW ---
+        elif self.view_mode == "Payment Modes":
             mode_series = clean_df["payment_mode"] if "payment_mode" in clean_df.columns else pd.Series(["UPI"] * len(clean_df))
             bar_data = mode_series.value_counts(ascending=True)
 
@@ -96,6 +113,7 @@ class AnalyticsView(ctk.CTkFrame):
             bar_colors = ["#6366f1" if m != top_mode else "#10b981" for m in bar_data.index]
             is_currency_bar = False
 
+        # --- EXPENSES OR INCOMES VIEW ---
         else:
             target_type = "Expense" if self.view_mode == "Expenses" else "Income"
             self.highlight_lbl.configure(text="")
@@ -147,7 +165,7 @@ class AnalyticsView(ctk.CTkFrame):
                 ha='left', va='center', color='#f3f4f6', fontsize=8.5, weight="bold"
             )
 
-        # --- B. PIE / DONUT CHART (Compatible with Matplotlib 3.11+ PieContainer) ---
+        # --- B. PIE / DONUT CHART ---
         pie_data = pie_data[pie_data > 0]
         if not pie_data.empty:
             self.ax_right.set_aspect('equal')
@@ -172,7 +190,6 @@ class AnalyticsView(ctk.CTkFrame):
                 pctdistance=0.74 if self.pie_type == "Donut" else 0.60
             )
 
-            # Safely style autotexts across both tuple returns and Matplotlib 3.11 PieContainer
             autotexts = []
             if hasattr(pie_result, 'autotexts'):
                 autotexts = pie_result.autotexts

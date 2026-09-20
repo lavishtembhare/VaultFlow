@@ -430,6 +430,7 @@ class ExportFilterDialog(ctk.CTkToplevel):
                     "date": "Date & Time",
                     "type": "Type",
                     "category": "Category",
+                    "account": "Account (Credited/Debited)",
                     "payment_mode": "Payment Mode",
                     "amount": f"Amount ({self.currency})",
                     "description": "Description"

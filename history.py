@@ -10,7 +10,6 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
         self.empty_lbl = None
 
     def render_list(self, df: pd.DataFrame, currency: str, db, highlight_new=False):
-        # Safely destroy ONLY user transaction rows, never internal canvas/scrollbar
         for card in self.row_cards:
             try:
                 card.destroy()
@@ -39,6 +38,10 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
             accent_color = "#10b981" if is_income else "#ef4444"
             sign = "+" if is_income else "-"
             pm = row.get("payment_mode", "UPI") if pd.notna(row.get("payment_mode")) else "UPI"
+            acc = row.get("account", "Bank") if pd.notna(row.get("account")) else "Bank"
+
+            # Dynamic Account Tag (📥 In: Bank vs 📤 From: Bank)
+            acc_tag = f"📥 In: {acc}" if is_income else f"📤 From: {acc}"
 
             card_bg = "#064e3b" if (is_newest and is_income) else ("#7f1d1d" if (is_newest and not is_income) else "#111827")
 
@@ -68,7 +71,7 @@ class TransactionHistoryView(ctk.CTkScrollableFrame):
 
             ctk.CTkLabel(
                 left_col, 
-                text=f"{row['date']}  •  {row['category']}  •  💳 {pm}", 
+                text=f"{row['date']}  •  {row['category']}  •  {acc_tag}  •  💳 {pm}", 
                 font=ctk.CTkFont(size=11), 
                 text_color="#9ca3af"
             ).pack(anchor="w")

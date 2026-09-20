@@ -14,7 +14,7 @@ class SidebarView(ctk.CTkFrame):
         self.on_open_settings = on_open_settings
         self._is_updating_amount = False
 
-        self.grid_rowconfigure(16, weight=1)
+        self.grid_rowconfigure(18, weight=1)
 
         # Title Header
         ctk.CTkLabel(self, text="🛡️ VaultFlow", font=ctk.CTkFont(size=22, weight="bold"), text_color="#38bdf8").grid(row=0, column=0, padx=20, pady=(20, 15), sticky="w")
@@ -40,19 +40,15 @@ class SidebarView(ctk.CTkFrame):
         self.type_toggle.set("Expense")
         self.type_toggle.grid(row=3, column=0, padx=20, pady=(0, 12), sticky="ew")
 
-        # --- AMOUNT ENTRY WITH DUAL-LAYER NUMERIC PROTECTION ---
+        # Amount Entry with Keystroke Filter
         ctk.CTkLabel(self, text="Amount:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=4, column=0, padx=20, pady=(0, 2), sticky="w")
-        
         self.amount_var = ctk.StringVar()
         self.amount_entry = ctk.CTkEntry(self, textvariable=self.amount_var, placeholder_text="0.00")
         self.amount_entry.grid(row=5, column=0, padx=20, pady=(0, 10), sticky="ew")
 
-        # Layer 1: Hardware Keystroke Interceptor (drops invalid keys before they render)
         self.amount_entry.bind("<KeyPress>", self._filter_keypress)
         if hasattr(self.amount_entry, "_entry"):
             self.amount_entry._entry.bind("<KeyPress>", self._filter_keypress)
-
-        # Layer 2: Variable Trace Sanitizer (strips non-numeric characters from pastes/edits)
         self.amount_var.trace_add("write", self._on_amount_write)
 
         # Category Row
@@ -65,20 +61,31 @@ class SidebarView(ctk.CTkFrame):
         self.category_menu = ctk.CTkOptionMenu(self, values=self.db.get_categories("Expense"), fg_color="#374151")
         self.category_menu.grid(row=7, column=0, padx=20, pady=(0, 10), sticky="ew")
 
+        # Account Field (Dynamic Label: "Money Debited From:" vs "Money Credited In:")
+        self.account_label = ctk.CTkLabel(self, text="Money Debited From:", font=ctk.CTkFont(size=11), text_color="#9ca3af")
+        self.account_label.grid(row=8, column=0, padx=20, pady=(0, 2), sticky="w")
+        self.account_menu = ctk.CTkOptionMenu(
+            self,
+            values=["Bank", "Cash", "Portfolio", "Other"],
+            fg_color="#374151"
+        )
+        self.account_menu.set("Bank")
+        self.account_menu.grid(row=9, column=0, padx=20, pady=(0, 10), sticky="ew")
+
         # Payment Mode Dropdown
-        ctk.CTkLabel(self, text="Payment Mode:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=8, column=0, padx=20, pady=(0, 2), sticky="w")
+        ctk.CTkLabel(self, text="Payment Mode:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=10, column=0, padx=20, pady=(0, 2), sticky="w")
         self.payment_menu = ctk.CTkOptionMenu(
             self,
             values=["UPI", "Net Banking", "Cash", "Credit Card", "Debit Card", "Cheque", "Other"],
             fg_color="#374151"
         )
         self.payment_menu.set("UPI")
-        self.payment_menu.grid(row=9, column=0, padx=20, pady=(0, 10), sticky="ew")
+        self.payment_menu.grid(row=11, column=0, padx=20, pady=(0, 10), sticky="ew")
 
         # Date & Time Row
-        ctk.CTkLabel(self, text="Date & Time (YYYY-MM-DD HH:MM):", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=10, column=0, padx=20, pady=(0, 2), sticky="w")
+        ctk.CTkLabel(self, text="Date & Time (YYYY-MM-DD HH:MM):", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=12, column=0, padx=20, pady=(0, 2), sticky="w")
         dt_frame = ctk.CTkFrame(self, fg_color="transparent")
-        dt_frame.grid(row=11, column=0, padx=20, pady=(0, 10), sticky="ew")
+        dt_frame.grid(row=13, column=0, padx=20, pady=(0, 10), sticky="ew")
         
         self.date_entry = ctk.CTkEntry(dt_frame)
         self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))
@@ -88,9 +95,9 @@ class SidebarView(ctk.CTkFrame):
         self.cal_btn.pack(side="right")
 
         # Description Entry
-        ctk.CTkLabel(self, text="Description:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=12, column=0, padx=20, pady=(0, 2), sticky="w")
-        self.desc_entry = ctk.CTkEntry(self, placeholder_text="e.g. Salary, Rent, Dinner")
-        self.desc_entry.grid(row=13, column=0, padx=20, pady=(0, 15), sticky="ew")
+        ctk.CTkLabel(self, text="Description:", font=ctk.CTkFont(size=11), text_color="#9ca3af").grid(row=14, column=0, padx=20, pady=(0, 2), sticky="w")
+        self.desc_entry = ctk.CTkEntry(self, placeholder_text="e.g. Salary, Rent, Dividends")
+        self.desc_entry.grid(row=15, column=0, padx=20, pady=(0, 15), sticky="ew")
 
         # Submit Button
         self.add_btn = ctk.CTkButton(
@@ -99,48 +106,42 @@ class SidebarView(ctk.CTkFrame):
             fg_color="#6366f1", hover_color="#4f46e5",
             command=self.submit
         )
-        self.add_btn.grid(row=14, column=0, padx=20, pady=(0, 15), sticky="ew")
+        self.add_btn.grid(row=16, column=0, padx=20, pady=(0, 15), sticky="ew")
 
-        # Utility Buttons (Export & Settings)
+        # Utility Buttons
         self.export_btn = ctk.CTkButton(
             self, text="📥 Filter & Export Excel", 
             fg_color="#10b981", hover_color="#059669",
             command=self.on_open_export
         )
-        self.export_btn.grid(row=17, column=0, padx=20, pady=(0, 8), sticky="ew")
+        self.export_btn.grid(row=19, column=0, padx=20, pady=(0, 8), sticky="ew")
 
         self.settings_btn = ctk.CTkButton(
             self, text="⚙️ Preferences & Categories", 
             fg_color="#374151", hover_color="#4b5563",
             command=self.on_open_settings
         )
-        self.settings_btn.grid(row=18, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.settings_btn.grid(row=20, column=0, padx=20, pady=(0, 20), sticky="ew")
 
     def _filter_keypress(self, event):
-        """Blocks non-numeric keystrokes at the hardware event level."""
-        # Allow navigation and control keys
         if event.keysym in ("BackSpace", "Delete", "Left", "Right", "Tab", "Home", "End", "Return", "Escape", "Up", "Down"):
             return None
-        # Allow clipboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+A, Ctrl+X)
         if event.state & 4:
             return None
 
         allow_sh = self.db.get_setting("allow_shorthand", "False") == "True"
         if not allow_sh:
-            # STRICT NUMERIC MODE: Only digits 0-9 and a single decimal point
             if event.char and not (event.char.isdigit() or event.char == '.'):
                 return "break"
             if event.char == '.' and '.' in self.amount_var.get():
                 return "break"
         else:
-            # Shorthand Mode: Digits, decimal, and shorthand suffix characters
             allowed_chars = set("0123456789.kmbcrolahstuindeKMBCROLAHSTEINDE ")
             if event.char and event.char not in allowed_chars:
                 return "break"
         return None
 
     def _on_amount_write(self, *args):
-        """Sanitizes the value on change (covers paste, drag-and-drop, and programmatic input)."""
         if self._is_updating_amount:
             return
 
@@ -185,6 +186,12 @@ class SidebarView(ctk.CTkFrame):
         if categories:
             self.category_menu.set(categories[0])
 
+        # Dynamic label adaptation
+        if selected_type == "Income":
+            self.account_label.configure(text="Money Credited In:")
+        else:
+            self.account_label.configure(text="Money Debited From:")
+
     def open_calendar(self):
         current_val = self.date_entry.get().strip()
         DateTimePickerDialog(self, initial_datetime=current_val, include_time=True, on_select=self.set_date_time)
@@ -215,6 +222,7 @@ class SidebarView(ctk.CTkFrame):
         date_str = self.date_entry.get().strip()
         desc = self.desc_entry.get().strip()
         category = self.category_menu.get()
+        account = self.account_menu.get()
         payment_mode = self.payment_menu.get()
         tx_type = self.type_toggle.get()
 
@@ -235,7 +243,7 @@ class SidebarView(ctk.CTkFrame):
                 messagebox.showerror("Validation Error", "Date format must be YYYY-MM-DD HH:MM (use 📅).")
                 return
 
-        self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc)
+        self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc, account=account)
         
         self.add_btn.configure(text="✔ Added!", fg_color="#10b981")
         def reset_btn():
