@@ -1,8 +1,9 @@
 <div align="center">
 
-<!-- ANIMATED TYPING HEADER -->
+<!-- APP ICON & ANIMATED TYPING HEADER -->
+<h1>🏛️</h1>
 <a href="https://github.com/yourusername/vaultflow">
-  <img src="https://readme-typing-svg.demolab.com?font=Consolas&size=26&pause=1000&color=F59E0B&center=true&vCenter=true&width=680&lines=🏛️+VAULTFLOW+:+PRIVATE+ASSET+OS;ZERO-CLOUD+OFFLINE+FINANCIAL+ENGINE;EXECUTIVE+LEDGER+%26+REAL-TIME+ANALYTICS;ENCRYPTED+LOCAL+SQLITE+STORAGE" alt="VaultFlow Dynamic Typing Header" />
+  <img src="https://readme-typing-svg.demolab.com?font=Consolas&size=26&pause=1000&color=F59E0B&center=true&vCenter=true&width=680&lines=VAULTFLOW+:+PRIVATE+ASSET+OS;ZERO-CLOUD+OFFLINE+FINANCIAL+ENGINE;EXECUTIVE+LEDGER+AND+REAL-TIME+ANALYTICS;ENCRYPTED+LOCAL+SQLITE+STORAGE" alt="VaultFlow Dynamic Typing Header" />
 </a>
 
 <p align="center">
