@@ -42,14 +42,14 @@
  ┌────────────────────────────────────────────────────────────────────────┐
  │  [🏛️ VAULTFLOW PRIVATE ASSET OS]                                      │
  │                                                                        │
- │  [// INFLOW LIQUIDITY]   [// OUTFLOW BURN]    [// NET ASSET RESERVE]  │
- │   $142,500.00             $38,210.00           $104,290.00            │
- │   ▲ +18.4% MoM            ▼ -4.2% MoM          ▲ Solvency 73.1%       │
+ │  [// INFLOW LIQUIDITY]   [// OUTFLOW BURN]    [// NET ASSET RESERVE]   │
+ │   $142,500.00             $38,210.00           $104,290.00             │
+ │   ▲ +18.4% MoM            ▼ -4.2% MoM          ▲ Solvency 73.1%        │
  │                                                                        │
  │  [ANALYTICS ENGINE]                           [LEDGER AUDIT LOG]       │
- │   • Status Distribution (Donut)                • 2026-09-21: Retainer │
- │   • Monthly Burn Velocity (Line Graph)         • 2026-09-18: Cloud HW │
- │   • Channel Allocation (Funnel Bars)           • 2026-09-14: Dividend │
+ │   • Status Distribution (Donut)                • 2026-09-21: Retainer  │
+ │   • Monthly Burn Velocity (Line Graph)         • 2026-09-18: Cloud HW  │
+ │   • Channel Allocation (Funnel Bars)           • 2026-09-14: Dividend  │
  └────────────────────────────────────────────────────────────────────────┘
 
 ```
