@@ -1,6 +1,9 @@
+import os
 import sqlite3
 from datetime import datetime
 import pandas as pd
+
+DEFAULT_EXPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports")
 
 def format_currency_amount(amount, currency="$", format_style="Millions / Billions", compact_enabled=False):
     """Formats numeric values into Standard, Millions, or Lakhs/Crores notations."""
@@ -21,9 +24,9 @@ def format_currency_amount(amount, currency="$", format_style="Millions / Billio
             return f"{sign}{currency}{abs_amt:,.2f}"
 
     elif format_style == "Lakhs / Crores":
-        if abs_amt >= 10_000_000:  # 1 Crore = 10,000,000
+        if abs_amt >= 10_000_000:
             return f"{sign}{currency}{abs_amt / 10_000_000:.2f} Cr"
-        elif abs_amt >= 100_000:   # 1 Lakh = 100,000
+        elif abs_amt >= 100_000:
             return f"{sign}{currency}{abs_amt / 100_000:.2f} Lakh"
         elif abs_amt >= 1_000:
             return f"{sign}{currency}{abs_amt / 1_000:.2f} K"
@@ -34,30 +37,18 @@ def format_currency_amount(amount, currency="$", format_style="Millions / Billio
 
 
 def parse_amount(amt_str, allow_shorthand=False):
-    """Parses standard numbers and optional shorthand suffixes (e.g. 5k, 7m, 2cr, 10lakh)."""
+    """Parses standard numbers and optional shorthand suffixes."""
     amt_str = amt_str.strip().lower().replace(",", "")
     if not amt_str:
         raise ValueError("Please enter an amount.")
 
     if allow_shorthand:
         multipliers = {
-            'crores': 10_000_000,
-            'crore': 10_000_000,
-            'cr': 10_000_000,
-            'billions': 1_000_000_000,
-            'billion': 1_000_000_000,
-            'b': 1_000_000_000,
-            'millions': 1_000_000,
-            'million': 1_000_000,
-            'm': 1_000_000,
-            'lakhs': 100_000,
-            'lakh': 100_000,
-            'lacs': 100_000,
-            'lac': 100_000,
-            'l': 100_000,
-            'thousands': 1_000,
-            'thousand': 1_000,
-            'k': 1_000
+            'crores': 10_000_000, 'crore': 10_000_000, 'cr': 10_000_000,
+            'billions': 1_000_000_000, 'billion': 1_000_000_000, 'b': 1_000_000_000,
+            'millions': 1_000_000, 'million': 1_000_000, 'm': 1_000_000,
+            'lakhs': 100_000, 'lakh': 100_000, 'lacs': 100_000, 'lac': 100_000, 'l': 100_000,
+            'thousands': 1_000, 'thousand': 1_000, 'k': 1_000
         }
         for suffix, mult in sorted(multipliers.items(), key=lambda x: -len(x[0])):
             if amt_str.endswith(suffix):
@@ -110,51 +101,14 @@ class DatabaseManager:
                     value TEXT NOT NULL
                 )
             """)
-
-            # Schema Migrations
-            cursor.execute("PRAGMA table_info(transactions)")
-            t_cols = [col[1] for col in cursor.fetchall()]
-            if "payment_mode" not in t_cols:
-                cursor.execute("ALTER TABLE transactions ADD COLUMN payment_mode TEXT DEFAULT 'UPI'")
-            if "account" not in t_cols:
-                cursor.execute("ALTER TABLE transactions ADD COLUMN account TEXT DEFAULT 'Bank'")
-
-            # Fix categories schema if needed
-            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'")
-            cat_meta = cursor.fetchone()
-            if cat_meta:
-                sql = cat_meta[0]
-                if "name TEXT UNIQUE" in sql or "UNIQUE (name)" in sql or "UNIQUE(name)" in sql:
-                    cursor.execute("PRAGMA table_info(categories)")
-                    cols = [c[1] for c in cursor.fetchall()]
-                    has_type = "type" in cols
-                    if has_type:
-                        cursor.execute("SELECT name, type FROM categories")
-                        existing_cats = cursor.fetchall()
-                    else:
-                        cursor.execute("SELECT name FROM categories")
-                        existing_cats = [(r[0], 'Expense') for r in cursor.fetchall()]
-
-                    cursor.execute("DROP TABLE categories")
-                    cursor.execute("""
-                        CREATE TABLE categories (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            name TEXT NOT NULL,
-                            type TEXT NOT NULL DEFAULT 'Expense',
-                            UNIQUE(name, type)
-                        )
-                    """)
-                    for name, c_type in existing_cats:
-                        cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (name, c_type))
-            else:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS categories (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        type TEXT NOT NULL DEFAULT 'Expense',
-                        UNIQUE(name, type)
-                    )
-                """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'Expense',
+                    UNIQUE(name, type)
+                )
+            """)
 
             # Default categories
             expense_defaults = ["Food", "Bills", "Rent", "Shopping", "Transport", "Entertainment", "Healthcare", "Other"]
@@ -165,11 +119,13 @@ class DatabaseManager:
             for cat in income_defaults:
                 cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Income')", (cat,))
 
-            # Settings Defaults
+            # Default Settings
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', '$')")
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('compact_numbers', 'False')")
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('number_format', 'Millions / Billions')")
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_shorthand', 'False')")
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_shorthand', 'True')")
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('export_dir', ?)", (DEFAULT_EXPORT_PATH,))
+
             conn.commit()
 
     def add_transaction(self, tx_type, date, category, payment_mode, amount, description, account="Bank"):
@@ -188,34 +144,22 @@ class DatabaseManager:
             conn.commit()
 
     def clear_all_transactions(self):
-        """Permanently wipes all transactions from the database."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM transactions")
             conn.commit()
 
     def import_transactions_from_dataframe(self, imported_df):
-        """
-        Intelligently maps and imports records from an uploaded Excel or CSV DataFrame.
-        Handles flexible column naming (e.g., VaultFlow exports or generic spreadsheets).
-        """
         col_map = {}
         for col in imported_df.columns:
             clean = str(col).strip().lower().replace("_", " ").replace("-", " ")
-            if "date" in clean or "time" in clean:
-                col_map["date"] = col
-            elif "type" in clean:
-                col_map["type"] = col
-            elif "cat" in clean:
-                col_map["category"] = col
-            elif "acc" in clean or "credit" in clean or "debit" in clean:
-                col_map["account"] = col
-            elif "pay" in clean or "mode" in clean:
-                col_map["payment_mode"] = col
-            elif any(k in clean for k in ["amt", "amount", "price", "cost", "value"]):
-                col_map["amount"] = col
-            elif any(k in clean for k in ["desc", "note", "remark", "detail", "title"]):
-                col_map["description"] = col
+            if "date" in clean or "time" in clean: col_map["date"] = col
+            elif "type" in clean: col_map["type"] = col
+            elif "cat" in clean: col_map["category"] = col
+            elif "acc" in clean or "credit" in clean or "debit" in clean: col_map["account"] = col
+            elif "pay" in clean or "mode" in clean: col_map["payment_mode"] = col
+            elif any(k in clean for k in ["amt", "amount", "price", "cost", "value"]): col_map["amount"] = col
+            elif any(k in clean for k in ["desc", "note", "remark", "detail", "title"]): col_map["description"] = col
 
         if "amount" not in col_map:
             raise ValueError("Could not find an 'Amount' column in the uploaded file.")
@@ -225,15 +169,12 @@ class DatabaseManager:
             cursor = conn.cursor()
             for _, row in imported_df.iterrows():
                 try:
-                    # Clean and parse numeric amount
                     raw_amt = str(row[col_map["amount"]]).replace("$", "").replace("₹", "").replace("€", "").replace("£", "").replace(",", "").strip()
                     amt = float(raw_amt)
-                    if amt == 0 or pd.isna(amt):
-                        continue
+                    if amt == 0 or pd.isna(amt): continue
                 except Exception:
                     continue
 
-                # Determine Type (Expense vs Income)
                 if "type" in col_map and pd.notna(row[col_map["type"]]):
                     raw_type = str(row[col_map["type"]]).strip().capitalize()
                     tx_type = "Income" if any(x in raw_type.lower() for x in ["inc", "credit", "+"]) else "Expense"
@@ -241,8 +182,6 @@ class DatabaseManager:
                     tx_type = "Income" if amt < 0 else "Expense"
 
                 amt = abs(amt)
-
-                # Determine Date
                 date_val = datetime.now().strftime("%Y-%m-%d %H:%M")
                 if "date" in col_map and pd.notna(row[col_map["date"]]):
                     try:
@@ -251,27 +190,10 @@ class DatabaseManager:
                     except Exception:
                         date_val = str(row[col_map["date"]]).strip()
 
-                # Determine Category
-                category = "Other"
-                if "category" in col_map and pd.notna(row[col_map["category"]]):
-                    category = str(row[col_map["category"]]).strip()
-
-                # Determine Account
-                account = "Bank"
-                if "account" in col_map and pd.notna(row[col_map["account"]]):
-                    raw_acc = str(row[col_map["account"]]).replace("📥 In:", "").replace("📤 From:", "").strip()
-                    if raw_acc:
-                        account = raw_acc
-
-                # Determine Payment Mode
-                payment_mode = "UPI"
-                if "payment_mode" in col_map and pd.notna(row[col_map["payment_mode"]]):
-                    payment_mode = str(row[col_map["payment_mode"]]).strip()
-
-                # Determine Description
-                desc = ""
-                if "description" in col_map and pd.notna(row[col_map["description"]]):
-                    desc = str(row[col_map["description"]]).strip()
+                category = str(row[col_map["category"]]).strip() if "category" in col_map and pd.notna(row[col_map["category"]]) else "Other"
+                account = str(row[col_map["account"]]).replace("📥 In:", "").replace("📤 From:", "").strip() if "account" in col_map and pd.notna(row[col_map["account"]]) else "Bank"
+                payment_mode = str(row[col_map["payment_mode"]]).strip() if "payment_mode" in col_map and pd.notna(row[col_map["payment_mode"]]) else "UPI"
+                desc = str(row[col_map["description"]]).strip() if "description" in col_map and pd.notna(row[col_map["description"]]) else ""
 
                 cursor.execute(
                     "INSERT INTO transactions (type, date, category, payment_mode, account, amount, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -279,7 +201,6 @@ class DatabaseManager:
                 )
                 cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (category, tx_type))
                 imported_count += 1
-
             conn.commit()
 
         return imported_count

@@ -1,7 +1,9 @@
+import os
+from datetime import datetime
 import customtkinter as ctk
 import pandas as pd
 from tkinter import filedialog, messagebox
-from dialogs import ExportFilterDialog
+from database import DEFAULT_EXPORT_PATH
 
 class SettingsView(ctk.CTkScrollableFrame):
     def __init__(self, parent, db, on_settings_changed):
@@ -10,6 +12,7 @@ class SettingsView(ctk.CTkScrollableFrame):
         self.on_settings_changed = on_settings_changed
         self.cat_row_widgets = []
 
+        # Header Title
         title_box = ctk.CTkFrame(self, fg_color="transparent")
         title_box.pack(fill="x", padx=40, pady=(30, 20))
 
@@ -20,7 +23,7 @@ class SettingsView(ctk.CTkScrollableFrame):
         ).pack(anchor="w")
 
         ctk.CTkLabel(
-            title_box, text="Configure currency notations, classification tags, and encrypted exports.",
+            title_box, text="Configure currency notations, classification tags, and automated export destinations.",
             font=ctk.CTkFont(size=12),
             text_color="#64748b"
         ).pack(anchor="w")
@@ -29,7 +32,7 @@ class SettingsView(ctk.CTkScrollableFrame):
         cards_grid.pack(fill="x", padx=40, pady=(0, 20))
         cards_grid.grid_columnconfigure((0, 1), weight=1)
 
-        # Left Card: Preferences
+        # ----------------- LEFT CARD: PREFERENCES -----------------
         pref_card = ctk.CTkFrame(cards_grid, fg_color="#111625", corner_radius=14, border_width=1, border_color="#1e263b")
         pref_card.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
 
@@ -74,7 +77,7 @@ class SettingsView(ctk.CTkScrollableFrame):
             self.shorthand_switch.select()
         self.shorthand_switch.pack(anchor="w", padx=20, pady=(0, 20))
 
-        # Right Card: Categories
+        # ----------------- RIGHT CARD: CATEGORIES -----------------
         cat_card = ctk.CTkFrame(cards_grid, fg_color="#111625", corner_radius=14, border_width=1, border_color="#1e263b")
         cat_card.grid(row=0, column=1, padx=(10, 0), sticky="nsew")
 
@@ -105,40 +108,121 @@ class SettingsView(ctk.CTkScrollableFrame):
         self.cat_scroll = ctk.CTkScrollableFrame(cat_card, height=180, fg_color="#0a0d16", corner_radius=8)
         self.cat_scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        # Bottom Card: Utilities
+        # ----------------- BOTTOM CARD: SAME AS APPLITRACK -----------------
         data_card = ctk.CTkFrame(self, fg_color="#111625", corner_radius=14, border_width=1, border_color="#1e263b")
         data_card.pack(fill="x", padx=40, pady=(0, 30))
 
-        ctk.CTkLabel(data_card, text="LEDGER BACKUP & MAINTENANCE", font=ctk.CTkFont(family="Consolas", size=12, weight="bold"), text_color="#38bdf8").pack(anchor="w", padx=20, pady=(20, 2))
-        ctk.CTkLabel(data_card, text="Import third-party bank CSVs, produce filtered Excel reports, or purge local database.", font=ctk.CTkFont(size=11), text_color="#64748b").pack(anchor="w", padx=20, pady=(0, 16))
+        ctk.CTkLabel(data_card, text="💾 PREDECIDED EXPORT PATH & ARCHIVE", font=ctk.CTkFont(family="Consolas", size=12, weight="bold"), text_color="#00f5a0").pack(anchor="w", padx=20, pady=(20, 2))
+        ctk.CTkLabel(data_card, text="Automated destination where Excel spreadsheets are saved immediately without popups.", font=ctk.CTkFont(size=11), text_color="#64748b").pack(anchor="w", padx=20, pady=(0, 12))
 
+        # Predecided Path Row
+        path_box = ctk.CTkFrame(data_card, fg_color="transparent")
+        path_box.pack(fill="x", padx=20, pady=(0, 16))
+
+        current_dir = self.db.get_setting("export_dir", DEFAULT_EXPORT_PATH)
+        self.path_entry = ctk.CTkEntry(
+            path_box, height=36,
+            fg_color="#0a0d16", border_color="#1e263b",
+            font=ctk.CTkFont(family="Consolas", size=11)
+        )
+        self.path_entry.insert(0, current_dir)
+        self.path_entry.configure(state="readonly")
+        self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        ctk.CTkButton(
+            path_box, text="Change Folder", width=120, height=36,
+            font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
+            fg_color="#1e263b", hover_color="#2b3149", text_color="#f8fafc",
+            command=self.choose_export_directory
+        ).pack(side="left", padx=(0, 6))
+
+        ctk.CTkButton(
+            path_box, text="Open Folder", width=105, height=36,
+            font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
+            fg_color="#1e263b", hover_color="#2b3149", text_color="#f8fafc",
+            command=self.open_export_directory
+        ).pack(side="left")
+
+        # Action Buttons (Clean 2-button layout, exactly like AppliTrack)
         action_box = ctk.CTkFrame(data_card, fg_color="transparent")
         action_box.pack(fill="x", padx=20, pady=(0, 20))
 
-        ctk.CTkButton(
-            action_box, text="📥 Ingest Excel / CSV", height=38,
-            fg_color="#1e263b", hover_color="#2b3652", text_color="#f8fafc",
-            font=ctk.CTkFont(family="Consolas", weight="bold"),
-            command=self.import_excel_file
-        ).pack(side="left", padx=(0, 12))
-
-        ctk.CTkButton(
-            action_box, text="📤 Filter & Export Excel", height=38,
-            fg_color="#0e2a22", hover_color="#144236", text_color="#10b981",
+        self.export_btn = ctk.CTkButton(
+            action_box, text="⚡ Instant Export to Excel (.xlsx)",
+            fg_color="#0e2a22", hover_color="#144236", text_color="#00f5a0",
             border_width=1, border_color="#184e3f",
-            font=ctk.CTkFont(family="Consolas", weight="bold"),
-            command=self.open_export_dialog
-        ).pack(side="left", padx=(0, 12))
+            height=38, font=ctk.CTkFont(family="Consolas", weight="bold"),
+            command=self.export_records
+        )
+        self.export_btn.pack(side="left", padx=(0, 15))
 
         ctk.CTkButton(
-            action_box, text="⚠️ Purge Ledger", height=38,
+            action_box, text="⚠️ Wipe Entire Database",
             fg_color="#380b15", hover_color="#540f1f", text_color="#f43f5e",
             border_width=1, border_color="#540f1f",
-            font=ctk.CTkFont(family="Consolas", weight="bold"),
-            command=self.clear_all_records
+            height=38, font=ctk.CTkFont(family="Consolas", weight="bold"),
+            command=self.clear_all_data
         ).pack(side="left")
 
         self.load_categories_list()
+
+    def choose_export_directory(self):
+        current = self.path_entry.get()
+        new_dir = filedialog.askdirectory(initialdir=current, title="Select Predecided VaultFlow Export Directory")
+        if new_dir:
+            self.db.set_setting("export_dir", new_dir)
+            self.path_entry.configure(state="normal")
+            self.path_entry.delete(0, "end")
+            self.path_entry.insert(0, new_dir)
+            self.path_entry.configure(state="readonly")
+            messagebox.showinfo("Export Path Updated", f"Predecided export path saved:\n\n{new_dir}")
+
+    def open_export_directory(self):
+        target_dir = self.path_entry.get().strip()
+        os.makedirs(target_dir, exist_ok=True)
+        try:
+            os.startfile(target_dir)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not open directory:\n{str(e)}")
+
+    def export_records(self):
+        df = self.db.get_all_transactions()
+        if df.empty:
+            messagebox.showinfo("Export", "No transaction records available to export.")
+            return
+
+        export_dir = self.path_entry.get().strip()
+        os.makedirs(export_dir, exist_ok=True)
+
+        currency = self.db.get_setting("currency", "$")
+        filename = f"VaultFlow_Export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        full_filepath = os.path.join(export_dir, filename)
+
+        try:
+            export_df = df.rename(columns={
+                "date": "Execution Date & Time",
+                "type": "Flow Type",
+                "category": "Classification Tag",
+                "account": "Account Transacted",
+                "payment_mode": "Payment Conduit",
+                "amount": f"Amount ({currency})",
+                "description": "Narration / Note"
+            })
+            with pd.ExcelWriter(full_filepath, engine="openpyxl") as writer:
+                export_df.to_excel(writer, index=False, sheet_name="VaultFlow_Records")
+
+            self.export_btn.configure(text="✔ EXPORTED!", fg_color="#00f5a0", text_color="#000000")
+            self.after(1500, lambda: self.export_btn.configure(text="⚡ Instant Export to Excel (.xlsx)", fg_color="#0e2a22", text_color="#00f5a0"))
+
+            confirm = messagebox.askyesno(
+                "Export Complete",
+                f"Successfully exported {len(export_df)} records:\n\n{filename}\n\nLocation:\n{export_dir}\n\nOpen export directory now?"
+            )
+            if confirm:
+                os.startfile(export_dir)
+
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to generate Excel file:\n{str(e)}")
 
     def save_currency(self, new_currency):
         self.db.set_setting("currency", new_currency)
@@ -210,38 +294,8 @@ class SettingsView(ctk.CTkScrollableFrame):
             self.load_categories_list()
             self.on_settings_changed()
 
-    def import_excel_file(self):
-        file_path = filedialog.askopenfilename(
-            title="Select Bank Statement or CSV Spreadsheet",
-            filetypes=[("Spreadsheet Files", "*.xlsx *.xls *.csv"), ("Excel Files", "*.xlsx *.xls"), ("CSV Files", "*.csv")]
-        )
-        if not file_path:
-            return
-
-        try:
-            df = pd.read_csv(file_path) if file_path.lower().endswith(".csv") else pd.read_excel(file_path)
-            if df.empty:
-                messagebox.showwarning("Empty Ingestion", "File contains zero rows.")
-                return
-
-            imported_count = self.db.import_transactions_from_dataframe(df)
-            messagebox.showinfo("Ingestion Complete", f"Successfully imported {imported_count} transactions into VaultFlow!\n\nSource: {file_path}")
-            self.load_categories_list()
-            self.on_settings_changed()
-
-        except Exception as e:
-            messagebox.showerror("Ingestion Error", f"Failed to parse spreadsheet:\n{str(e)}")
-
-    def open_export_dialog(self):
-        currency = self.db.get_setting("currency", "$")
-        ExportFilterDialog(self, self.db, currency)
-
-    def clear_all_records(self):
-        confirm = messagebox.askyesno(
-            "Confirm Ledger Purge",
-            "⚠️ Purge all transactions?\n\nThis permanently resets all balances to zero."
-        )
-        if confirm:
+    def clear_all_data(self):
+        if messagebox.askyesno("Confirm Wipe", "⚠️ Wipe all transactions from SQLite database?"):
             self.db.clear_all_transactions()
-            messagebox.showinfo("Purged", "Ledger purged successfully.")
+            messagebox.showinfo("Wiped", "All ledger records wiped.")
             self.on_settings_changed()
