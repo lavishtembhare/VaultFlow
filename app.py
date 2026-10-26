@@ -2,7 +2,8 @@ import os
 import sys
 import ctypes
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
+from PIL import ImageTk
 import matplotlib.pyplot as plt
 
 from database import DatabaseManager
@@ -12,6 +13,7 @@ from history import TransactionHistoryView
 from sidebar import SidebarView
 from entry_view import EntryView
 from settings_view import SettingsView
+from make_vaultflow_icon import ensure_vaultflow_icon
 
 try:
     myappid = 'vaultflow.privateasset.desktop.2.0'
@@ -36,15 +38,17 @@ class VaultFlowApp(ctk.CTk):
         self.geometry("1240x800")
         self.minsize(1080, 720)
 
-        # Set custom VaultFlow Icon
+        # Generate & apply custom VaultFlow Icon to window, taskbar, and sidebar
         icon_path = get_asset_path("vaultflow_icon.ico")
-        if os.path.exists(icon_path):
-            try:
+        pil_icon = ensure_vaultflow_icon(icon_path)
+        try:
+            if os.path.exists(icon_path):
                 self.iconbitmap(icon_path)
-            except Exception:
-                pass
+            self._tk_icon = ImageTk.PhotoImage(pil_icon.resize((64, 64)))
+            self.wm_iconphoto(True, self._tk_icon)
+        except Exception:
+            pass
 
-        # Void Obsidian Root
         self.configure(fg_color="#080a11")
         self.db = DatabaseManager()
         self.currency = self.db.get_setting("currency", "$")
@@ -53,8 +57,8 @@ class VaultFlowApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # 1. Left Titanium Navigation Sidebar
-        self.sidebar = SidebarView(self, on_navigate=self.show_view)
+        # 1. Left Navigation Sidebar (with App Icon & Separate Logs Tab)
+        self.sidebar = SidebarView(self, on_navigate=self.show_view, icon_image=pil_icon)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
 
         # 2. Main Content Host Area
@@ -63,28 +67,21 @@ class VaultFlowApp(ctk.CTk):
         self.main_container.grid_columnconfigure(0, weight=1)
         self.main_container.grid_rowconfigure(0, weight=1)
 
-        # VIEW 1: DASHBOARD
+        # VIEW 1: DASHBOARD (Metrics + Full-Height Analytics)
         self.dashboard_view = ctk.CTkFrame(self.main_container, fg_color="transparent")
         self.dashboard_view.grid_columnconfigure(0, weight=1)
-        self.dashboard_view.grid_rowconfigure(2, weight=1)
+        self.dashboard_view.grid_rowconfigure(1, weight=1)
 
         dash_padding = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
-        dash_padding.pack(fill="both", expand=True, padx=20, pady=20)
+        dash_padding.pack(fill="both", expand=True, padx=24, pady=24)
         dash_padding.grid_columnconfigure(0, weight=1)
-        dash_padding.grid_rowconfigure(2, weight=1)
+        dash_padding.grid_rowconfigure(1, weight=1)
 
         self.metrics_view = MetricCardsView(dash_padding)
-        self.metrics_view.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        self.metrics_view.grid(row=0, column=0, sticky="ew", pady=(0, 16))
 
         self.analytics_view = AnalyticsView(dash_padding, on_style_change=self.refresh_ui)
-        self.analytics_view.grid(row=1, column=0, sticky="nsew", pady=(0, 12))
-
-        self.history_view = TransactionHistoryView(
-            dash_padding,
-            on_delete_callback=self.delete_record,
-            on_clear_all_callback=self.clear_all_records
-        )
-        self.history_view.grid(row=2, column=0, sticky="nsew")
+        self.analytics_view.grid(row=1, column=0, sticky="nsew")
 
         # VIEW 2: FULL-SCREEN DATA ENTRY
         self.entry_view = EntryView(
@@ -92,22 +89,33 @@ class VaultFlowApp(ctk.CTk):
             on_transaction_saved=self.handle_transaction_saved
         )
 
-        # VIEW 3: SETTINGS WORKSPACE
+        # VIEW 3: SEPARATE TRANSACTION LOGS TAB
+        self.logs_view = TransactionHistoryView(
+            self.main_container,
+            on_delete_callback=self.delete_record,
+            on_clear_all_callback=self.clear_all_records,
+            on_import_excel_callback=self.import_excel_records
+        )
+
+        # VIEW 4: SETTINGS WORKSPACE
         self.settings_view = SettingsView(
             self.main_container, self.db,
-            on_settings_changed=self.on_settings_updated
+            on_settings_changed=self.on_settings_updated,
+            on_import_excel=self.import_excel_records
         )
 
         self.views = {
             "dashboard": self.dashboard_view,
             "add_entry": self.entry_view,
+            "logs": self.logs_view,
             "settings": self.settings_view
         }
 
         # Keyboard shortcuts
         self.bind("<Control-Key-1>", lambda e: self.navigate_hotkey("dashboard"))
         self.bind("<Control-Key-2>", lambda e: self.navigate_hotkey("add_entry"))
-        self.bind("<Control-Key-3>", lambda e: self.navigate_hotkey("settings"))
+        self.bind("<Control-Key-3>", lambda e: self.navigate_hotkey("logs"))
+        self.bind("<Control-Key-4>", lambda e: self.navigate_hotkey("settings"))
         self.bind("<F5>", lambda e: self.refresh_ui())
 
         self.show_view("dashboard")
@@ -126,13 +134,41 @@ class VaultFlowApp(ctk.CTk):
 
         if view_key == "add_entry":
             self.entry_view.refresh_categories()
-        elif view_key == "dashboard":
+        elif view_key in ("dashboard", "logs"):
             self.refresh_ui()
 
     def handle_transaction_saved(self):
         self.refresh_ui(highlight_new=True)
-        self.sidebar.set_active("dashboard")
-        self.show_view("dashboard")
+        self.sidebar.set_active("logs")
+        self.show_view("logs")
+
+    def import_excel_records(self):
+        filepath = filedialog.askopenfilename(
+            title="Select Excel or CSV File to Import",
+            filetypes=[
+                ("Spreadsheet Files", "*.xlsx *.xls *.csv"),
+                ("Excel Files", "*.xlsx *.xls"),
+                ("CSV Files", "*.csv"),
+                ("All Files", "*.*")
+            ]
+        )
+        if not filepath:
+            return
+
+        try:
+            imported_count = self.db.import_from_file(filepath)
+            if imported_count > 0:
+                self.entry_view.refresh_categories()
+                self.settings_view.load_categories_list()
+                self.refresh_ui(highlight_new=True)
+                messagebox.showinfo(
+                    "Import Successful",
+                    f"Successfully imported {imported_count} transaction{'s' if imported_count != 1 else ''} into your ledger."
+                )
+            else:
+                messagebox.showwarning("Import Notice", "No valid non-zero transaction rows were found in the selected file.")
+        except Exception as e:
+            messagebox.showerror("Import Error", f"Could not import file:\n{str(e)}")
 
     def on_settings_updated(self):
         self.currency = self.db.get_setting("currency", "$")
@@ -140,7 +176,7 @@ class VaultFlowApp(ctk.CTk):
         self.refresh_ui()
 
     def delete_record(self, tx_id):
-        if messagebox.askyesno("Purge Transaction", "Purge this ledger transaction record?"):
+        if messagebox.askyesno("Delete Transaction", "Delete this transaction record?"):
             self.db.delete_transaction(tx_id)
             self.refresh_ui(highlight_new=False)
 
@@ -152,7 +188,7 @@ class VaultFlowApp(ctk.CTk):
         df = self.db.get_all_transactions()
         self.metrics_view.update_metrics(df, self.currency, self.db)
         self.analytics_view.render_charts(df, self.currency)
-        self.history_view.render_list(df, self.currency, self.db, highlight_new=highlight_new)
+        self.logs_view.render_list(df, self.currency, self.db, highlight_new=highlight_new)
 
     def on_close(self):
         try:

@@ -1,12 +1,32 @@
 import os
+import sys
 import sqlite3
 from datetime import datetime
 import pandas as pd
 
-DEFAULT_EXPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports")
+def get_app_dir() -> str:
+    """Returns the folder containing the .exe (when frozen) or script."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+APP_DIR = get_app_dir()
+DEFAULT_EXPORT_PATH = os.path.join(APP_DIR, "exports")
+DEFAULT_DB_PATH = os.path.join(APP_DIR, "vaultflow.db")
+
+# Pre-sorted descending by suffix length once at import time -> O(1) lookup
+SHORTHAND_MULTIPLIERS = (
+    ('billions', 1_000_000_000), ('thousands', 1_000), ('millions', 1_000_000),
+    ('billion', 1_000_000_000), ('thousand', 1_000), ('million', 1_000_000),
+    ('crores', 10_000_000), ('crore', 10_000_000), ('lakhs', 100_000),
+    ('lakh', 100_000), ('lacs', 100_000), ('lac', 100_000),
+    ('cr', 10_000_000), ('b', 1_000_000_000), ('m', 1_000_000),
+    ('l', 100_000), ('k', 1_000)
+)
+
 
 def format_currency_amount(amount, currency="$", format_style="Millions / Billions", compact_enabled=False):
-    """Formats numeric values into Standard, Millions, or Lakhs/Crores notations."""
+    """Formats numeric values into Standard, Millions, or Lakhs/Crores notations in O(1)."""
     if not compact_enabled or format_style == "Standard":
         return f"{currency}{amount:,.2f}"
 
@@ -20,8 +40,7 @@ def format_currency_amount(amount, currency="$", format_style="Millions / Billio
             return f"{sign}{currency}{abs_amt / 1_000_000:.2f}M"
         elif abs_amt >= 1_000:
             return f"{sign}{currency}{abs_amt / 1_000:.2f}K"
-        else:
-            return f"{sign}{currency}{abs_amt:,.2f}"
+        return f"{sign}{currency}{abs_amt:,.2f}"
 
     elif format_style == "Lakhs / Crores":
         if abs_amt >= 10_000_000:
@@ -30,27 +49,19 @@ def format_currency_amount(amount, currency="$", format_style="Millions / Billio
             return f"{sign}{currency}{abs_amt / 100_000:.2f} Lakh"
         elif abs_amt >= 1_000:
             return f"{sign}{currency}{abs_amt / 1_000:.2f} K"
-        else:
-            return f"{sign}{currency}{abs_amt:,.2f}"
+        return f"{sign}{currency}{abs_amt:,.2f}"
 
     return f"{currency}{amount:,.2f}"
 
 
 def parse_amount(amt_str, allow_shorthand=False):
-    """Parses standard numbers and optional shorthand suffixes."""
+    """Parses standard numbers and optional shorthand suffixes in O(1)."""
     amt_str = amt_str.strip().lower().replace(",", "")
     if not amt_str:
         raise ValueError("Please enter an amount.")
 
     if allow_shorthand:
-        multipliers = {
-            'crores': 10_000_000, 'crore': 10_000_000, 'cr': 10_000_000,
-            'billions': 1_000_000_000, 'billion': 1_000_000_000, 'b': 1_000_000_000,
-            'millions': 1_000_000, 'million': 1_000_000, 'm': 1_000_000,
-            'lakhs': 100_000, 'lakh': 100_000, 'lacs': 100_000, 'lac': 100_000, 'l': 100_000,
-            'thousands': 1_000, 'thousand': 1_000, 'k': 1_000
-        }
-        for suffix, mult in sorted(multipliers.items(), key=lambda x: -len(x[0])):
+        for suffix, mult in SHORTHAND_MULTIPLIERS:
             if amt_str.endswith(suffix):
                 num_part = amt_str[:-len(suffix)].strip()
                 try:
@@ -73,7 +84,7 @@ def parse_amount(amt_str, allow_shorthand=False):
 
 class DatabaseManager:
     """Handles SQLite storage for transactions, categories, accounts, and settings."""
-    def __init__(self, db_path="vaultflow.db"):
+    def __init__(self, db_path=DEFAULT_DB_PATH):
         self.db_path = db_path
         self.init_db()
 
@@ -96,6 +107,10 @@ class DatabaseManager:
                 )
             """)
             cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tx_date_id
+                ON transactions (date DESC, id DESC)
+            """)
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -110,22 +125,20 @@ class DatabaseManager:
                 )
             """)
 
-            # Default categories
-            expense_defaults = ["Food", "Bills", "Rent", "Shopping", "Transport", "Entertainment", "Healthcare", "Other"]
-            for cat in expense_defaults:
-                cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Expense')", (cat,))
+            expense_defaults = [("Food",), ("Bills",), ("Rent",), ("Shopping",), ("Transport",), ("Entertainment",), ("Healthcare",), ("Other",)]
+            cursor.executemany("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Expense')", expense_defaults)
 
-            income_defaults = ["Salary", "Rent Received", "Freelance", "Revenue", "Investment", "Bonus", "Other"]
-            for cat in income_defaults:
-                cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Income')", (cat,))
+            income_defaults = [("Salary",), ("Rent Received",), ("Freelance",), ("Revenue",), ("Investment",), ("Bonus",), ("Other",)]
+            cursor.executemany("INSERT OR IGNORE INTO categories (name, type) VALUES (?, 'Income')", income_defaults)
 
-            # Default Settings
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('currency', '$')")
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('compact_numbers', 'False')")
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('number_format', 'Millions / Billions')")
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('allow_shorthand', 'True')")
-            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('export_dir', ?)", (DEFAULT_EXPORT_PATH,))
-
+            default_settings = [
+                ('currency', '$'),
+                ('compact_numbers', 'False'),
+                ('number_format', 'Millions / Billions'),
+                ('allow_shorthand', 'True'),
+                ('export_dir', DEFAULT_EXPORT_PATH)
+            ]
+            cursor.executemany("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", default_settings)
             conn.commit()
 
     def add_transaction(self, tx_type, date, category, payment_mode, amount, description, account="Bank"):
@@ -149,65 +162,135 @@ class DatabaseManager:
             cursor.execute("DELETE FROM transactions")
             conn.commit()
 
-    def import_transactions_from_dataframe(self, imported_df):
+    def import_from_file(self, filepath: str) -> int:
+        """Loads an Excel (.xlsx/.xls) or CSV file and imports records in O(n) time."""
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext == ".csv":
+            df = pd.read_csv(filepath)
+        else:
+            df = pd.read_excel(filepath)
+        return self.import_transactions_from_dataframe(df)
+
+    def import_transactions_from_dataframe(self, imported_df: pd.DataFrame) -> int:
+        """O(n) single-pass bulk import using batched executemany."""
+        if imported_df is None or imported_df.empty:
+            return 0
+
         col_map = {}
-        for col in imported_df.columns:
+        for idx, col in enumerate(imported_df.columns):
             clean = str(col).strip().lower().replace("_", " ").replace("-", " ")
-            if "date" in clean or "time" in clean: col_map["date"] = col
-            elif "type" in clean: col_map["type"] = col
-            elif "cat" in clean: col_map["category"] = col
-            elif "acc" in clean or "credit" in clean or "debit" in clean: col_map["account"] = col
-            elif "pay" in clean or "mode" in clean: col_map["payment_mode"] = col
-            elif any(k in clean for k in ["amt", "amount", "price", "cost", "value"]): col_map["amount"] = col
-            elif any(k in clean for k in ["desc", "note", "remark", "detail", "title"]): col_map["description"] = col
+            if ("date" in clean or "time" in clean) and "date" not in col_map:
+                col_map["date"] = idx
+            elif "type" in clean and "type" not in col_map:
+                col_map["type"] = idx
+            elif ("cat" in clean or "tag" in clean) and "category" not in col_map:
+                col_map["category"] = idx
+            elif ("acc" in clean or "credit" in clean or "debit" in clean) and "account" not in col_map:
+                col_map["account"] = idx
+            elif ("pay" in clean or "mode" in clean or "conduit" in clean) and "payment_mode" not in col_map:
+                col_map["payment_mode"] = idx
+            elif any(k in clean for k in ("amt", "amount", "price", "cost", "value")) and "amount" not in col_map:
+                col_map["amount"] = idx
+            elif any(k in clean for k in ("desc", "note", "remark", "detail", "title", "narration")) and "description" not in col_map:
+                col_map["description"] = idx
 
         if "amount" not in col_map:
-            raise ValueError("Could not find an 'Amount' column in the uploaded file.")
+            raise ValueError("Could not find an 'Amount' column in the selected file.")
 
-        imported_count = 0
+        amt_idx = col_map["amount"]
+        type_idx = col_map.get("type")
+        date_idx = col_map.get("date")
+        cat_idx = col_map.get("category")
+        acc_idx = col_map.get("account")
+        pm_idx = col_map.get("payment_mode")
+        desc_idx = col_map.get("description")
+
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        tx_batch = []
+        cat_batch = set()
+
+        for row in imported_df.itertuples(index=False, name=None):
+            raw_val = row[amt_idx]
+            if pd.isna(raw_val):
+                continue
+            try:
+                if isinstance(raw_val, (int, float)):
+                    amt = float(raw_val)
+                else:
+                    cleaned_amt = (
+                        str(raw_val)
+                        .replace("$", "").replace("₹", "").replace("€", "")
+                        .replace("£", "").replace("¥", "").replace(",", "").strip()
+                    )
+                    amt = float(cleaned_amt)
+                if amt == 0:
+                    continue
+            except Exception:
+                continue
+
+            if type_idx is not None and pd.notna(row[type_idx]):
+                raw_type = str(row[type_idx]).strip().lower()
+                tx_type = "Income" if ("inc" in raw_type or "credit" in raw_type or "+" in raw_type) else "Expense"
+            else:
+                tx_type = "Income" if amt < 0 else "Expense"
+
+            amt = abs(amt)
+
+            date_val = now_str
+            if date_idx is not None and pd.notna(row[date_idx]):
+                cell_dt = row[date_idx]
+                if hasattr(cell_dt, "strftime"):
+                    date_val = cell_dt.strftime("%Y-%m-%d %H:%M")
+                else:
+                    raw_dt = str(cell_dt).strip()
+                    if len(raw_dt) == 10 and raw_dt[4:5] == "-" and raw_dt[7:8] == "-":
+                        date_val = f"{raw_dt} 00:00"
+                    else:
+                        date_val = raw_dt[:16] if len(raw_dt) >= 16 else raw_dt
+
+            category = str(row[cat_idx]).strip() if (cat_idx is not None and pd.notna(row[cat_idx]) and str(row[cat_idx]).strip()) else "Other"
+            account = (
+                str(row[acc_idx]).replace("📥 In:", "").replace("📤 From:", "").strip()
+                if (acc_idx is not None and pd.notna(row[acc_idx]) and str(row[acc_idx]).strip())
+                else "Bank"
+            )
+            payment_mode = (
+                str(row[pm_idx]).strip()
+                if (pm_idx is not None and pd.notna(row[pm_idx]) and str(row[pm_idx]).strip())
+                else "UPI"
+            )
+            desc = (
+                str(row[desc_idx]).strip()
+                if (desc_idx is not None and pd.notna(row[desc_idx]))
+                else ""
+            )
+
+            tx_batch.append((tx_type, date_val, category, payment_mode, account, amt, desc))
+            cat_batch.add((category, tx_type))
+
+        if not tx_batch:
+            return 0
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            for _, row in imported_df.iterrows():
-                try:
-                    raw_amt = str(row[col_map["amount"]]).replace("$", "").replace("₹", "").replace("€", "").replace("£", "").replace(",", "").strip()
-                    amt = float(raw_amt)
-                    if amt == 0 or pd.isna(amt): continue
-                except Exception:
-                    continue
-
-                if "type" in col_map and pd.notna(row[col_map["type"]]):
-                    raw_type = str(row[col_map["type"]]).strip().capitalize()
-                    tx_type = "Income" if any(x in raw_type.lower() for x in ["inc", "credit", "+"]) else "Expense"
-                else:
-                    tx_type = "Income" if amt < 0 else "Expense"
-
-                amt = abs(amt)
-                date_val = datetime.now().strftime("%Y-%m-%d %H:%M")
-                if "date" in col_map and pd.notna(row[col_map["date"]]):
-                    try:
-                        parsed_dt = pd.to_datetime(row[col_map["date"]])
-                        date_val = parsed_dt.strftime("%Y-%m-%d %H:%M")
-                    except Exception:
-                        date_val = str(row[col_map["date"]]).strip()
-
-                category = str(row[col_map["category"]]).strip() if "category" in col_map and pd.notna(row[col_map["category"]]) else "Other"
-                account = str(row[col_map["account"]]).replace("📥 In:", "").replace("📤 From:", "").strip() if "account" in col_map and pd.notna(row[col_map["account"]]) else "Bank"
-                payment_mode = str(row[col_map["payment_mode"]]).strip() if "payment_mode" in col_map and pd.notna(row[col_map["payment_mode"]]) else "UPI"
-                desc = str(row[col_map["description"]]).strip() if "description" in col_map and pd.notna(row[col_map["description"]]) else ""
-
-                cursor.execute(
-                    "INSERT INTO transactions (type, date, category, payment_mode, account, amount, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (tx_type, date_val, category, payment_mode, account, amt, desc)
-                )
-                cursor.execute("INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)", (category, tx_type))
-                imported_count += 1
+            cursor.executemany(
+                "INSERT INTO transactions (type, date, category, payment_mode, account, amount, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                tx_batch
+            )
+            cursor.executemany(
+                "INSERT OR IGNORE INTO categories (name, type) VALUES (?, ?)",
+                list(cat_batch)
+            )
             conn.commit()
 
-        return imported_count
+        return len(tx_batch)
 
     def get_all_transactions(self):
         with self.get_connection() as conn:
-            return pd.read_sql_query("SELECT * FROM transactions ORDER BY date DESC, id DESC", conn)
+            return pd.read_sql_query(
+                "SELECT * FROM transactions INDEXED BY idx_tx_date_id ORDER BY date DESC, id DESC",
+                conn
+            )
 
     def get_filtered_transactions(self, start_date, end_date):
         with self.get_connection() as conn:

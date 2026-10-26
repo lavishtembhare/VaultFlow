@@ -16,14 +16,35 @@ class AddCategoryDialog(ctk.CTkToplevel):
         self.configure(fg_color="#080a11")
         self.grab_set()
 
-        ctk.CTkLabel(self, text=f"New {self.tx_type} Category:", font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc").pack(pady=(25, 10))
-        self.entry = ctk.CTkEntry(self, width=250, placeholder_text="Category name...", fg_color="#111625", border_color="#1e263b")
-        self.entry.pack(pady=5)
+        ctk.CTkLabel(
+            self, text=f"New {self.tx_type} Category",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#f8fafc"
+        ).pack(pady=(24, 10))
+
+        self.entry = ctk.CTkEntry(
+            self, width=260, height=36,
+            placeholder_text="Category name...",
+            fg_color="#111625", border_color="#1e293b", corner_radius=8
+        )
+        self.entry.pack(pady=4)
+        self.entry.focus_set()
+        self.entry.bind("<Return>", lambda _: self.save())
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(pady=20)
-        ctk.CTkButton(btn_frame, text="Cancel", width=105, fg_color="#1e263b", hover_color="#2b3652", text_color="#94a3b8", command=self.destroy).pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="Save", width=105, fg_color="#10b981", hover_color="#059669", text_color="#000000", font=ctk.CTkFont(weight="bold"), command=self.save).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            btn_frame, text="Cancel", width=110, height=34,
+            fg_color="#182032", hover_color="#222d46", text_color="#94a3b8",
+            corner_radius=8, command=self.destroy
+        ).pack(side="left", padx=6)
+
+        ctk.CTkButton(
+            btn_frame, text="Save", width=110, height=34,
+            fg_color="#38bdf8", hover_color="#0284c7", text_color="#090d16",
+            font=ctk.CTkFont(weight="bold"), corner_radius=8, command=self.save
+        ).pack(side="left", padx=6)
 
     def save(self):
         cat_name = self.entry.get().strip()
@@ -65,50 +86,94 @@ class DateTimePickerDialog(ctk.CTkToplevel):
         self.configure(fg_color="#080a11")
         self.grab_set()
 
-        self.month_names = ["", "January", "February", "March", "April", "May", "June",
-                            "July", "August", "September", "October", "November", "December"]
+        self.month_names = (
+            "", "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        )
 
         nav_frame = ctk.CTkFrame(self, fg_color="transparent")
-        nav_frame.pack(fill="x", padx=15, pady=(15, 8))
+        nav_frame.pack(fill="x", padx=16, pady=(16, 8))
 
-        ctk.CTkButton(nav_frame, text="◀", width=32, height=28, fg_color="#1e263b", hover_color="#2b3652", command=self.prev_month).pack(side="left")
-        self.header_lbl = ctk.CTkLabel(nav_frame, text="", font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc")
+        ctk.CTkButton(
+            nav_frame, text="◀", width=32, height=28, corner_radius=6,
+            fg_color="#182032", hover_color="#222d46", command=self.prev_month
+        ).pack(side="left")
+
+        self.header_lbl = ctk.CTkLabel(
+            nav_frame, text="",
+            font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc"
+        )
         self.header_lbl.pack(side="left", expand=True)
-        ctk.CTkButton(nav_frame, text="▶", width=32, height=28, fg_color="#1e263b", hover_color="#2b3652", command=self.next_month).pack(side="right")
 
-        self.days_frame = ctk.CTkFrame(self, fg_color="#111625", corner_radius=8)
-        self.days_frame.pack(padx=15, pady=5, fill="both", expand=True)
+        ctk.CTkButton(
+            nav_frame, text="▶", width=32, height=28, corner_radius=6,
+            fg_color="#182032", hover_color="#222d46", command=self.next_month
+        ).pack(side="right")
+
+        self.days_frame = ctk.CTkFrame(
+            self, fg_color="#111625", corner_radius=10,
+            border_width=1, border_color="#1e293b"
+        )
+        self.days_frame.pack(padx=16, pady=6, fill="both", expand=True)
+
+        # Pre-allocate weekday headers and 6x7 button pool once -> O(1) redraws
+        weekdays = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+        for col, wd in enumerate(weekdays):
+            self.days_frame.grid_columnconfigure(col, weight=1)
+            lbl = ctk.CTkLabel(
+                self.days_frame, text=wd,
+                font=ctk.CTkFont(size=11, weight="bold"), text_color="#64748b"
+            )
+            lbl.grid(row=0, column=col, pady=(8, 4))
+
+        self.day_buttons = []
+        for r in range(6):
+            row_btns = []
+            for c in range(7):
+                btn = ctk.CTkButton(
+                    self.days_frame, text="", width=34, height=28,
+                    corner_radius=6, font=ctk.CTkFont(size=11)
+                )
+                btn.grid(row=r + 1, column=c, padx=2, pady=2)
+                row_btns.append(btn)
+            self.day_buttons.append(row_btns)
 
         if self.include_time:
             time_frame = ctk.CTkFrame(self, fg_color="transparent")
-            time_frame.pack(fill="x", padx=15, pady=(8, 0))
+            time_frame.pack(fill="x", padx=16, pady=(8, 0))
 
-            ctk.CTkLabel(time_frame, text="Time:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#94a3b8").pack(side="left", padx=(5, 10))
+            ctk.CTkLabel(
+                time_frame, text="Time:",
+                font=ctk.CTkFont(size=12, weight="bold"), text_color="#94a3b8"
+            ).pack(side="left", padx=(4, 10))
 
             self.hour_menu = ctk.CTkOptionMenu(
                 time_frame, width=70, height=28,
                 values=[f"{h:02d}" for h in range(24)],
-                fg_color="#1e263b"
+                fg_color="#182032", button_color="#222d46"
             )
             self.hour_menu.set(f"{self.selected_hour:02d}")
             self.hour_menu.pack(side="left", padx=2)
 
-            ctk.CTkLabel(time_frame, text=":", font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc").pack(side="left", padx=2)
+            ctk.CTkLabel(
+                time_frame, text=":",
+                font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc"
+            ).pack(side="left", padx=2)
 
             self.min_menu = ctk.CTkOptionMenu(
                 time_frame, width=70, height=28,
-                values=[f"{m:02d}" for m in range(0, 60, 1)],
-                fg_color="#1e263b"
+                values=[f"{m:02d}" for m in range(60)],
+                fg_color="#182032", button_color="#222d46"
             )
             self.min_menu.set(f"{self.selected_minute:02d}")
             self.min_menu.pack(side="left", padx=2)
 
         ctk.CTkButton(
-            self, text="Set Date & Time", height=32,
-            font=ctk.CTkFont(weight="bold"),
-            fg_color="#f59e0b", hover_color="#d97706", text_color="#000000",
+            self, text="Confirm Selection", height=36, corner_radius=8,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#38bdf8", hover_color="#0284c7", text_color="#090d16",
             command=self.confirm_selection
-        ).pack(fill="x", padx=15, pady=(10, 15))
+        ).pack(fill="x", padx=16, pady=(12, 16))
 
         self.draw_calendar()
 
@@ -118,6 +183,9 @@ class DateTimePickerDialog(ctk.CTkToplevel):
             self.current_year -= 1
         else:
             self.current_month -= 1
+        max_day = calendar.monthrange(self.current_year, self.current_month)[1]
+        if self.selected_day > max_day:
+            self.selected_day = max_day
         self.draw_calendar()
 
     def next_month(self):
@@ -126,33 +194,35 @@ class DateTimePickerDialog(ctk.CTkToplevel):
             self.current_year += 1
         else:
             self.current_month += 1
+        max_day = calendar.monthrange(self.current_year, self.current_month)[1]
+        if self.selected_day > max_day:
+            self.selected_day = max_day
         self.draw_calendar()
 
     def draw_calendar(self):
-        for widget in self.days_frame.winfo_children():
-            widget.destroy()
-
         self.header_lbl.configure(text=f"{self.month_names[self.current_month]} {self.current_year}")
-
-        weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
-        for col, wd in enumerate(weekdays):
-            lbl = ctk.CTkLabel(self.days_frame, text=wd, font=ctk.CTkFont(size=11, weight="bold"), text_color="#64748b")
-            lbl.grid(row=0, column=col, pady=(6, 4))
-
         month_days = calendar.monthcalendar(self.current_year, self.current_month)
-        for r, week in enumerate(month_days):
-            for c, day in enumerate(week):
+
+        for r in range(6):
+            week = month_days[r] if r < len(month_days) else (0, 0, 0, 0, 0, 0, 0)
+            for c in range(7):
+                day = week[c]
+                btn = self.day_buttons[r][c]
                 if day != 0:
                     is_selected = (day == self.selected_day)
-                    btn = ctk.CTkButton(
-                        self.days_frame, text=str(day), width=34, height=28,
-                        fg_color="#f59e0b" if is_selected else "transparent",
-                        text_color="#000000" if is_selected else "#f8fafc",
-                        hover_color="#d97706",
-                        font=ctk.CTkFont(size=11),
+                    btn.configure(
+                        text=str(day),
+                        state="normal",
+                        fg_color="#38bdf8" if is_selected else "transparent",
+                        text_color="#090d16" if is_selected else "#f8fafc",
+                        hover_color="#0284c7" if is_selected else "#1e293b",
                         command=lambda d=day: self.select_day(d)
                     )
-                    btn.grid(row=r + 1, column=c, padx=2, pady=2)
+                else:
+                    btn.configure(
+                        text="", state="disabled",
+                        fg_color="transparent", command=None
+                    )
 
     def select_day(self, day):
         self.selected_day = day
