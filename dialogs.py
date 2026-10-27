@@ -63,25 +63,24 @@ class DateTimePickerDialog(ctk.CTkToplevel):
         self.include_time = include_time
 
         now = datetime.now()
+        dt_obj = now
         if initial_datetime:
-            try:
-                dt_obj = datetime.strptime(initial_datetime, "%Y-%m-%d %H:%M")
-            except ValueError:
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
                 try:
-                    dt_obj = datetime.strptime(initial_datetime, "%Y-%m-%d")
+                    dt_obj = datetime.strptime(initial_datetime, fmt)
+                    break
                 except ValueError:
-                    dt_obj = now
-        else:
-            dt_obj = now
+                    continue
 
         self.current_year = dt_obj.year
         self.current_month = dt_obj.month
         self.selected_day = dt_obj.day
         self.selected_hour = dt_obj.hour
         self.selected_minute = dt_obj.minute
+        self.selected_second = dt_obj.second if initial_datetime and len(initial_datetime.strip()) == 19 else now.second
 
         self.title("Select Date & Time" if include_time else "Select Date")
-        self.geometry("340x440" if include_time else "340x360")
+        self.geometry("360x440" if include_time else "340x360")
         self.resizable(False, False)
         self.configure(fg_color="#080a11")
         self.grab_set()
@@ -143,12 +142,12 @@ class DateTimePickerDialog(ctk.CTkToplevel):
             time_frame.pack(fill="x", padx=16, pady=(8, 0))
 
             ctk.CTkLabel(
-                time_frame, text="Time:",
+                time_frame, text="Time (H:M:S):",
                 font=ctk.CTkFont(size=12, weight="bold"), text_color="#94a3b8"
-            ).pack(side="left", padx=(4, 10))
+            ).pack(side="left", padx=(2, 8))
 
             self.hour_menu = ctk.CTkOptionMenu(
-                time_frame, width=70, height=28,
+                time_frame, width=62, height=28,
                 values=[f"{h:02d}" for h in range(24)],
                 fg_color="#182032", button_color="#222d46"
             )
@@ -158,15 +157,28 @@ class DateTimePickerDialog(ctk.CTkToplevel):
             ctk.CTkLabel(
                 time_frame, text=":",
                 font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc"
-            ).pack(side="left", padx=2)
+            ).pack(side="left", padx=1)
 
             self.min_menu = ctk.CTkOptionMenu(
-                time_frame, width=70, height=28,
+                time_frame, width=62, height=28,
                 values=[f"{m:02d}" for m in range(60)],
                 fg_color="#182032", button_color="#222d46"
             )
             self.min_menu.set(f"{self.selected_minute:02d}")
             self.min_menu.pack(side="left", padx=2)
+
+            ctk.CTkLabel(
+                time_frame, text=":",
+                font=ctk.CTkFont(size=14, weight="bold"), text_color="#f8fafc"
+            ).pack(side="left", padx=1)
+
+            self.sec_menu = ctk.CTkOptionMenu(
+                time_frame, width=62, height=28,
+                values=[f"{s:02d}" for s in range(60)],
+                fg_color="#182032", button_color="#222d46"
+            )
+            self.sec_menu.set(f"{self.selected_second:02d}")
+            self.sec_menu.pack(side="left", padx=2)
 
         ctk.CTkButton(
             self, text="Confirm Selection", height=36, corner_radius=8,
@@ -232,7 +244,8 @@ class DateTimePickerDialog(ctk.CTkToplevel):
         if self.include_time:
             h = self.hour_menu.get()
             m = self.min_menu.get()
-            result = f"{self.current_year:04d}-{self.current_month:02d}-{self.selected_day:02d} {h}:{m}"
+            s = self.sec_menu.get()
+            result = f"{self.current_year:04d}-{self.current_month:02d}-{self.selected_day:02d} {h}:{m}:{s}"
         else:
             result = f"{self.current_year:04d}-{self.current_month:02d}-{self.selected_day:02d}"
 

@@ -25,6 +25,28 @@ SHORTHAND_MULTIPLIERS = (
 )
 
 
+def normalize_timestamp(dt_str: str) -> str:
+    """Normalizes date strings into 'YYYY-MM-DD HH:MM:SS' in O(1) time for exact sorting."""
+    s = str(dt_str).strip()
+    if len(s) == 19 and s[4:5] == "-" and s[7:8] == "-" and s[13:14] == ":" and s[16:17] == ":":
+        return s
+    if len(s) == 16 and s[4:5] == "-" and s[7:8] == "-" and s[13:14] == ":":
+        return f"{s}:00"
+    if len(s) == 10 and s[4:5] == "-" and s[7:8] == "-":
+        return f"{s} 00:00:00"
+
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y %H:%M", "%d-%m-%Y", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+
+    try:
+        return pd.to_datetime(s).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def format_currency_amount(amount, currency="$", format_style="Millions / Billions", compact_enabled=False):
     """Formats numeric values into Standard, Millions, or Lakhs/Crores notations in O(1)."""
     if not compact_enabled or format_style == "Standard":
@@ -106,6 +128,11 @@ class DatabaseManager:
                     description TEXT
                 )
             """)
+            # Normalize any legacy YYYY-MM-DD HH:MM or YYYY-MM-DD records to YYYY-MM-DD HH:MM:SS
+            cursor.execute("UPDATE transactions SET date = date || ':00' WHERE length(date) = 16")
+            cursor.execute("UPDATE transactions SET date = date || ' 00:00:00' WHERE length(date) = 10")
+
+            # Composite index guarantees O(n) ordered scan by exact date & time (including seconds)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_tx_date_id
                 ON transactions (date DESC, id DESC)
@@ -142,11 +169,12 @@ class DatabaseManager:
             conn.commit()
 
     def add_transaction(self, tx_type, date, category, payment_mode, amount, description, account="Bank"):
+        normalized_dt = normalize_timestamp(date)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO transactions (type, date, category, payment_mode, account, amount, description) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (tx_type, date, category, payment_mode, account, amount, description)
+                (tx_type, normalized_dt, category, payment_mode, account, amount, description)
             )
             conn.commit()
 
@@ -172,7 +200,7 @@ class DatabaseManager:
         return self.import_transactions_from_dataframe(df)
 
     def import_transactions_from_dataframe(self, imported_df: pd.DataFrame) -> int:
-        """O(n) single-pass bulk import using batched executemany."""
+        """O(n) single-pass bulk import using batched executemany with full HH:MM:SS timestamps."""
         if imported_df is None or imported_df.empty:
             return 0
 
@@ -205,7 +233,7 @@ class DatabaseManager:
         pm_idx = col_map.get("payment_mode")
         desc_idx = col_map.get("description")
 
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         tx_batch = []
         cat_batch = set()
 
@@ -240,13 +268,9 @@ class DatabaseManager:
             if date_idx is not None and pd.notna(row[date_idx]):
                 cell_dt = row[date_idx]
                 if hasattr(cell_dt, "strftime"):
-                    date_val = cell_dt.strftime("%Y-%m-%d %H:%M")
+                    date_val = cell_dt.strftime("%Y-%m-%d %H:%M:%S")
                 else:
-                    raw_dt = str(cell_dt).strip()
-                    if len(raw_dt) == 10 and raw_dt[4:5] == "-" and raw_dt[7:8] == "-":
-                        date_val = f"{raw_dt} 00:00"
-                    else:
-                        date_val = raw_dt[:16] if len(raw_dt) >= 16 else raw_dt
+                    date_val = normalize_timestamp(str(cell_dt))
 
             category = str(row[cat_idx]).strip() if (cat_idx is not None and pd.notna(row[cat_idx]) and str(row[cat_idx]).strip()) else "Other"
             account = (
@@ -286,6 +310,7 @@ class DatabaseManager:
         return len(tx_batch)
 
     def get_all_transactions(self):
+        """Returns all transactions sorted by YYYY-MM-DD HH:MM:SS DESC in O(n) via index scan."""
         with self.get_connection() as conn:
             return pd.read_sql_query(
                 "SELECT * FROM transactions INDEXED BY idx_tx_date_id ORDER BY date DESC, id DESC",
@@ -298,7 +323,7 @@ class DatabaseManager:
                 SELECT date, type, category, account, payment_mode, amount, description 
                 FROM transactions 
                 WHERE date BETWEEN ? AND ? 
-                ORDER BY date ASC
+                ORDER BY date ASC, id ASC
             """
             return pd.read_sql_query(query, conn, params=(start_date, end_date))
 

@@ -89,7 +89,7 @@ class EntryView(ctk.CTkScrollableFrame):
 
         date_header = ctk.CTkFrame(self.form_card, fg_color="transparent")
         date_header.grid(row=6, column=0, padx=25, pady=(0, 4), sticky="ew")
-        ctk.CTkLabel(date_header, text="DATE & TIME", font=ctk.CTkFont(size=11, weight="bold"), text_color="#94a3b8").pack(side="left")
+        ctk.CTkLabel(date_header, text="DATE & TIME (YYYY-MM-DD HH:MM:SS)", font=ctk.CTkFont(size=11, weight="bold"), text_color="#94a3b8").pack(side="left")
         ctk.CTkButton(
             date_header, text="Now", width=48, height=20,
             font=ctk.CTkFont(size=10, weight="bold"), fg_color="#1e293b", hover_color="#2b3652",
@@ -100,7 +100,7 @@ class EntryView(ctk.CTkScrollableFrame):
         dt_box.grid(row=7, column=0, padx=25, pady=(0, 18), sticky="ew")
 
         self.date_entry = ctk.CTkEntry(dt_box, height=38, fg_color="#0a0d16", border_color="#1e293b", font=ctk.CTkFont(size=12))
-        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))
+        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         self.date_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
         self.cal_btn = ctk.CTkButton(
@@ -204,7 +204,7 @@ class EntryView(ctk.CTkScrollableFrame):
 
     def set_now(self):
         self.date_entry.delete(0, "end")
-        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M"))
+        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     def open_calendar(self):
         current_val = self.date_entry.get().strip()
@@ -235,15 +235,21 @@ class EntryView(ctk.CTkScrollableFrame):
             messagebox.showerror("Validation Error", str(e))
             return
 
+        now = datetime.now()
         try:
-            datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+            parsed_dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            date_str = parsed_dt.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             try:
-                datetime.strptime(date_str, "%Y-%m-%d")
-                date_str += " " + datetime.now().strftime("%H:%M")
+                parsed_dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+                date_str = parsed_dt.strftime(f"%Y-%m-%d %H:%M:{now.second:02d}")
             except ValueError:
-                messagebox.showerror("Validation Error", "Date format must be YYYY-MM-DD HH:MM (or use 📅).")
-                return
+                try:
+                    parsed_dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    date_str = parsed_dt.strftime("%Y-%m-%d") + " " + now.strftime("%H:%M:%S")
+                except ValueError:
+                    messagebox.showerror("Validation Error", "Date format must be YYYY-MM-DD HH:MM:SS (or use 📅).")
+                    return
 
         self.db.add_transaction(tx_type, date_str, category, payment_mode, amt, desc, account=account)
 
