@@ -4,15 +4,7 @@ import ctypes
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import ImageTk
-import matplotlib.pyplot as plt
 
-from database import DatabaseManager
-from metrics import MetricCardsView
-from analytics import AnalyticsView
-from history import TransactionHistoryView
-from sidebar import SidebarView
-from entry_view import EntryView
-from settings_view import SettingsView
 from make_vaultflow_icon import ensure_vaultflow_icon
 
 try:
@@ -37,8 +29,9 @@ class VaultFlowApp(ctk.CTk):
         self.title("VaultFlow — Private Asset & Liquid Flow Suite")
         self.geometry("1240x800")
         self.minsize(1080, 720)
+        self.configure(fg_color="#080a11")
 
-        # Generate & apply custom VaultFlow Icon to window, taskbar, and sidebar
+        # 1. Apply icon & force immediate window paint before loading heavy libraries
         icon_path = get_asset_path("vaultflow_icon.ico")
         pil_icon = ensure_vaultflow_icon(icon_path)
         try:
@@ -49,25 +42,35 @@ class VaultFlowApp(ctk.CTk):
         except Exception:
             pass
 
-        self.configure(fg_color="#080a11")
-        self.db = DatabaseManager()
-        self.currency = self.db.get_setting("currency", "$")
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
-
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # 1. Left Navigation Sidebar (with App Icon & Separate Logs Tab)
+        from sidebar import SidebarView
         self.sidebar = SidebarView(self, on_navigate=self.show_view, icon_image=pil_icon)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
 
-        # 2. Main Content Host Area
         self.main_container = ctk.CTkFrame(self, fg_color="#0c0f18", corner_radius=0)
         self.main_container.grid(row=0, column=1, sticky="nsew")
         self.main_container.grid_columnconfigure(0, weight=1)
         self.main_container.grid_rowconfigure(0, weight=1)
 
-        # VIEW 1: DASHBOARD (Metrics + Full-Height Analytics)
+        # Render the window shell immediately on screen
+        self.update_idletasks()
+        self.update()
+
+        # 2. Load database and views now that the window is visible
+        from database import DatabaseManager
+        from metrics import MetricCardsView
+        from analytics import AnalyticsView
+        from history import TransactionHistoryView
+        from entry_view import EntryView
+        from settings_view import SettingsView
+
+        self.db = DatabaseManager()
+        self.currency = self.db.get_setting("currency", "$")
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        # VIEW 1: DASHBOARD
         self.dashboard_view = ctk.CTkFrame(self.main_container, fg_color="transparent")
         self.dashboard_view.grid_columnconfigure(0, weight=1)
         self.dashboard_view.grid_rowconfigure(1, weight=1)
@@ -111,7 +114,6 @@ class VaultFlowApp(ctk.CTk):
             "settings": self.settings_view
         }
 
-        # Keyboard shortcuts
         self.bind("<Control-Key-1>", lambda e: self.navigate_hotkey("dashboard"))
         self.bind("<Control-Key-2>", lambda e: self.navigate_hotkey("add_entry"))
         self.bind("<Control-Key-3>", lambda e: self.navigate_hotkey("logs"))
@@ -192,6 +194,7 @@ class VaultFlowApp(ctk.CTk):
 
     def on_close(self):
         try:
+            import matplotlib.pyplot as plt
             plt.close('all')
             self.withdraw()
             self.quit()
