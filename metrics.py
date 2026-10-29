@@ -22,32 +22,33 @@ class MetricCardsView(ctk.CTkFrame):
 
     def make_card(self, tag, title, val, col, text_color):
         frame = ctk.CTkFrame(
-            self, corner_radius=12, fg_color="#111625",
+            self, corner_radius=14, fg_color="#111625",
             border_width=1, border_color="#1e293b"
         )
-        frame.grid(row=0, column=col, sticky="ew", padx=6, pady=2)
+        padx = (0, 8) if col == 0 else ((8, 0) if col == 3 else 8)
+        frame.grid(row=0, column=col, sticky="ew", padx=padx, pady=2)
 
         top_row = ctk.CTkFrame(frame, fg_color="transparent")
-        top_row.pack(fill="x", padx=16, pady=(12, 2))
+        top_row.pack(fill="x", padx=22, pady=(16, 2))
 
         ctk.CTkLabel(
             top_row, text=tag,
-            font=ctk.CTkFont(size=10, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
             text_color="#64748b"
         ).pack(side="left")
 
         ctk.CTkLabel(
             frame, text=title,
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=13),
             text_color="#94a3b8"
-        ).pack(anchor="w", padx=16, pady=(0, 2))
+        ).pack(anchor="w", padx=22, pady=(0, 4))
 
         lbl_val = ctk.CTkLabel(
             frame, text=val,
-            font=ctk.CTkFont(size=22, weight="bold"),
+            font=ctk.CTkFont(size=28, weight="bold"),
             text_color=text_color
         )
-        lbl_val.pack(anchor="w", padx=16, pady=(2, 14))
+        lbl_val.pack(anchor="w", padx=22, pady=(2, 18))
 
         return lbl_val
 
@@ -63,7 +64,6 @@ class MetricCardsView(ctk.CTkFrame):
             self.count_card.configure(text="0")
             return
 
-        # Single O(n) pass over types and amounts
         total_income = 0.0
         total_expense = 0.0
         count = 0

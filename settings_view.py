@@ -15,160 +15,168 @@ class SettingsView(ctk.CTkScrollableFrame):
 
         # Header Title
         title_box = ctk.CTkFrame(self, fg_color="transparent")
-        title_box.pack(fill="x", padx=40, pady=(30, 20))
+        title_box.pack(fill="x", padx=56, pady=(38, 24))
 
         ctk.CTkLabel(
             title_box, text="Settings & Data Control",
-            font=ctk.CTkFont(size=22, weight="bold"),
+            font=ctk.CTkFont(size=26, weight="bold"),
             text_color="#f8fafc"
         ).pack(anchor="w")
 
         ctk.CTkLabel(
             title_box, text="Configure currency formatting, categories, and Excel import/export options.",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=14),
             text_color="#64748b"
-        ).pack(anchor="w")
+        ).pack(anchor="w", pady=(2, 0))
 
         cards_grid = ctk.CTkFrame(self, fg_color="transparent")
-        cards_grid.pack(fill="x", padx=40, pady=(0, 20))
+        cards_grid.pack(fill="x", padx=56, pady=(0, 24))
         cards_grid.grid_columnconfigure((0, 1), weight=1)
 
         # ----------------- LEFT CARD: PREFERENCES -----------------
-        pref_card = ctk.CTkFrame(cards_grid, fg_color="#111625", corner_radius=14, border_width=1, border_color="#1e293b")
-        pref_card.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
+        pref_card = ctk.CTkFrame(cards_grid, fg_color="#111625", corner_radius=16, border_width=1, border_color="#1e293b")
+        pref_card.grid(row=0, column=0, padx=(0, 12), sticky="nsew")
 
-        ctk.CTkLabel(pref_card, text="Currency & Formatting", font=ctk.CTkFont(size=14, weight="bold"), text_color="#38bdf8").pack(anchor="w", padx=20, pady=(20, 2))
-        ctk.CTkLabel(pref_card, text="Customize how numbers and shorthand inputs are handled.", font=ctk.CTkFont(size=11), text_color="#64748b").pack(anchor="w", padx=20, pady=(0, 14))
+        ctk.CTkLabel(pref_card, text="Currency & Formatting", font=ctk.CTkFont(size=16, weight="bold"), text_color="#38bdf8").pack(anchor="w", padx=26, pady=(24, 2))
+        ctk.CTkLabel(pref_card, text="Customize how numbers and shorthand inputs are handled.", font=ctk.CTkFont(size=12), text_color="#64748b").pack(anchor="w", padx=26, pady=(0, 18))
 
-        ctk.CTkLabel(pref_card, text="Currency Symbol:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#cbd5e1").pack(anchor="w", padx=20, pady=(0, 4))
+        ctk.CTkLabel(pref_card, text="Currency Symbol:", font=ctk.CTkFont(size=13, weight="bold"), text_color="#cbd5e1").pack(anchor="w", padx=26, pady=(0, 6))
         saved_currency = self.db.get_setting("currency", "$")
         self.currency_menu = ctk.CTkOptionMenu(
             pref_card, values=["$", "₹", "€", "£", "¥", "C$", "A$", "CHF"],
-            height=34, fg_color="#0a0d16", button_color="#1e293b",
+            height=40, fg_color="#0a0d16", button_color="#1e293b",
+            font=ctk.CTkFont(size=13),
             command=self.save_currency
         )
         self.currency_menu.set(saved_currency)
-        self.currency_menu.pack(fill="x", padx=20, pady=(0, 14))
+        self.currency_menu.pack(fill="x", padx=26, pady=(0, 18))
 
         compact_val = self.db.get_setting("compact_numbers", "False") == "True"
         self.compact_switch = ctk.CTkSwitch(
             pref_card, text="Compact Number Display (e.g. 7M / 70 Lakh)",
+            font=ctk.CTkFont(size=13),
             command=self.save_display_options, progress_color="#38bdf8"
         )
         if compact_val:
             self.compact_switch.select()
-        self.compact_switch.pack(anchor="w", padx=20, pady=(0, 14))
+        self.compact_switch.pack(anchor="w", padx=26, pady=(0, 18))
 
-        ctk.CTkLabel(pref_card, text="Scale Notation Style:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#cbd5e1").pack(anchor="w", padx=20, pady=(0, 4))
+        ctk.CTkLabel(pref_card, text="Scale Notation Style:", font=ctk.CTkFont(size=13, weight="bold"), text_color="#cbd5e1").pack(anchor="w", padx=26, pady=(0, 6))
         saved_fmt = self.db.get_setting("number_format", "Millions / Billions")
         self.format_menu = ctk.CTkOptionMenu(
             pref_card, values=["Millions / Billions", "Lakhs / Crores", "Standard"],
-            height=34, fg_color="#0a0d16", button_color="#1e293b",
+            height=40, fg_color="#0a0d16", button_color="#1e293b",
+            font=ctk.CTkFont(size=13),
             command=lambda _: self.save_display_options()
         )
         self.format_menu.set(saved_fmt)
-        self.format_menu.pack(fill="x", padx=20, pady=(0, 14))
+        self.format_menu.pack(fill="x", padx=26, pady=(0, 18))
 
         shorthand_val = self.db.get_setting("allow_shorthand", "True") == "True"
         self.shorthand_switch = ctk.CTkSwitch(
             pref_card, text="Allow Shorthand Input (e.g. 50k, 2m, 3cr)",
+            font=ctk.CTkFont(size=13),
             command=self.save_display_options, progress_color="#38bdf8"
         )
         if shorthand_val:
             self.shorthand_switch.select()
-        self.shorthand_switch.pack(anchor="w", padx=20, pady=(0, 20))
+        self.shorthand_switch.pack(anchor="w", padx=26, pady=(0, 26))
 
         # ----------------- RIGHT CARD: CATEGORIES -----------------
-        cat_card = ctk.CTkFrame(cards_grid, fg_color="#111625", corner_radius=14, border_width=1, border_color="#1e293b")
-        cat_card.grid(row=0, column=1, padx=(10, 0), sticky="nsew")
+        cat_card = ctk.CTkFrame(cards_grid, fg_color="#111625", corner_radius=16, border_width=1, border_color="#1e293b")
+        cat_card.grid(row=0, column=1, padx=(12, 0), sticky="nsew")
 
-        ctk.CTkLabel(cat_card, text="Categories", font=ctk.CTkFont(size=14, weight="bold"), text_color="#10b981").pack(anchor="w", padx=20, pady=(20, 2))
+        ctk.CTkLabel(cat_card, text="Categories", font=ctk.CTkFont(size=16, weight="bold"), text_color="#10b981").pack(anchor="w", padx=26, pady=(24, 2))
 
         self.cat_type_toggle = ctk.CTkSegmentedButton(
             cat_card, values=["Expense Categories", "Income Categories"],
-            height=32, fg_color="#0a0d16", selected_color="#10b981",
-            font=ctk.CTkFont(size=11, weight="bold"),
+            height=36, fg_color="#0a0d16", selected_color="#10b981",
+            font=ctk.CTkFont(size=12, weight="bold"),
             command=self.load_categories_list
         )
         self.cat_type_toggle.set("Expense Categories")
-        self.cat_type_toggle.pack(fill="x", padx=20, pady=(8, 10))
+        self.cat_type_toggle.pack(fill="x", padx=26, pady=(10, 12))
 
         add_box = ctk.CTkFrame(cat_card, fg_color="transparent")
-        add_box.pack(fill="x", padx=20, pady=(0, 10))
+        add_box.pack(fill="x", padx=26, pady=(0, 12))
 
-        self.new_cat_entry = ctk.CTkEntry(add_box, placeholder_text="New category name...", height=34, fg_color="#0a0d16", border_color="#1e293b")
-        self.new_cat_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.new_cat_entry = ctk.CTkEntry(
+            add_box, placeholder_text="New category name...",
+            height=40, font=ctk.CTkFont(size=13),
+            fg_color="#0a0d16", border_color="#1e293b"
+        )
+        self.new_cat_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
         ctk.CTkButton(
-            add_box, text="+ Add", width=70, height=34,
+            add_box, text="+ Add", width=85, height=40,
             fg_color="#10b981", hover_color="#059669", text_color="#000000",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=13, weight="bold"),
             command=self.add_category_inline
         ).pack(side="right")
 
-        self.cat_scroll = ctk.CTkScrollableFrame(cat_card, height=180, fg_color="#0a0d16", corner_radius=8)
-        self.cat_scroll.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self.cat_scroll = ctk.CTkScrollableFrame(cat_card, height=260, fg_color="#0a0d16", corner_radius=10)
+        self.cat_scroll.pack(fill="both", expand=True, padx=26, pady=(0, 24))
 
         # ----------------- BOTTOM CARD: IMPORT / EXPORT & ARCHIVE -----------------
-        data_card = ctk.CTkFrame(self, fg_color="#111625", corner_radius=14, border_width=1, border_color="#1e293b")
-        data_card.pack(fill="x", padx=40, pady=(0, 30))
+        data_card = ctk.CTkFrame(self, fg_color="#111625", corner_radius=16, border_width=1, border_color="#1e293b")
+        data_card.pack(fill="x", padx=56, pady=(0, 36))
 
-        ctk.CTkLabel(data_card, text="Excel Import, Export & Archive", font=ctk.CTkFont(size=14, weight="bold"), text_color="#10b981").pack(anchor="w", padx=20, pady=(20, 2))
-        ctk.CTkLabel(data_card, text="Import existing spreadsheets (.xlsx, .xls, .csv) or export your ledger to a default folder.", font=ctk.CTkFont(size=11), text_color="#64748b").pack(anchor="w", padx=20, pady=(0, 12))
+        ctk.CTkLabel(data_card, text="Excel Import, Export & Archive", font=ctk.CTkFont(size=16, weight="bold"), text_color="#10b981").pack(anchor="w", padx=26, pady=(24, 2))
+        ctk.CTkLabel(data_card, text="Import existing spreadsheets (.xlsx, .xls, .csv) or export your ledger to a default folder.", font=ctk.CTkFont(size=12), text_color="#64748b").pack(anchor="w", padx=26, pady=(0, 16))
 
         path_box = ctk.CTkFrame(data_card, fg_color="transparent")
-        path_box.pack(fill="x", padx=20, pady=(0, 16))
+        path_box.pack(fill="x", padx=26, pady=(0, 18))
 
         current_dir = self.db.get_setting("export_dir", DEFAULT_EXPORT_PATH)
         self.path_entry = ctk.CTkEntry(
-            path_box, height=36,
+            path_box, height=42,
             fg_color="#0a0d16", border_color="#1e293b",
-            font=ctk.CTkFont(size=12)
+            font=ctk.CTkFont(size=13)
         )
         self.path_entry.insert(0, current_dir)
         self.path_entry.configure(state="readonly")
-        self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.path_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
         ctk.CTkButton(
-            path_box, text="Change Folder", width=120, height=36,
-            font=ctk.CTkFont(size=12, weight="bold"),
+            path_box, text="Change Folder", width=135, height=42,
+            font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#1e293b", hover_color="#2b3652", text_color="#f8fafc",
             command=self.choose_export_directory
-        ).pack(side="left", padx=(0, 6))
+        ).pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(
-            path_box, text="Open Folder", width=105, height=36,
-            font=ctk.CTkFont(size=12, weight="bold"),
+            path_box, text="Open Folder", width=120, height=42,
+            font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#1e293b", hover_color="#2b3652", text_color="#f8fafc",
             command=self.open_export_directory
         ).pack(side="left")
 
         action_box = ctk.CTkFrame(data_card, fg_color="transparent")
-        action_box.pack(fill="x", padx=20, pady=(0, 20))
+        action_box.pack(fill="x", padx=26, pady=(0, 24))
 
         self.import_btn = ctk.CTkButton(
-            action_box, text="📥  Import Excel / CSV",
+            action_box, text="📥   Import Excel / CSV",
             fg_color="#162035", hover_color="#1e2d4a", text_color="#38bdf8",
             border_width=1, border_color="#28385c",
-            height=38, font=ctk.CTkFont(size=12, weight="bold"),
+            width=210, height=44, font=ctk.CTkFont(size=13, weight="bold"),
             command=self._trigger_import
         )
-        self.import_btn.pack(side="left", padx=(0, 12))
+        self.import_btn.pack(side="left", padx=(0, 14))
 
         self.export_btn = ctk.CTkButton(
-            action_box, text="📤  Export to Excel (.xlsx)",
+            action_box, text="📤   Export to Excel (.xlsx)",
             fg_color="#0e2a22", hover_color="#144236", text_color="#10b981",
             border_width=1, border_color="#184e3f",
-            height=38, font=ctk.CTkFont(size=12, weight="bold"),
+            width=230, height=44, font=ctk.CTkFont(size=13, weight="bold"),
             command=self.export_records
         )
-        self.export_btn.pack(side="left", padx=(0, 12))
+        self.export_btn.pack(side="left", padx=(0, 14))
 
         ctk.CTkButton(
-            action_box, text="🗑️  Wipe Database",
+            action_box, text="🗑️   Wipe Database",
             fg_color="#380b15", hover_color="#540f1f", text_color="#f43f5e",
             border_width=1, border_color="#540f1f",
-            height=38, font=ctk.CTkFont(size=12, weight="bold"),
+            width=180, height=44, font=ctk.CTkFont(size=13, weight="bold"),
             command=self.clear_all_data
         ).pack(side="left")
 
@@ -224,7 +232,7 @@ class SettingsView(ctk.CTkScrollableFrame):
                 export_df.to_excel(writer, index=False, sheet_name="VaultFlow_Records")
 
             self.export_btn.configure(text="✔ Exported!", fg_color="#10b981", text_color="#000000")
-            self.after(1500, lambda: self.export_btn.configure(text="📤  Export to Excel (.xlsx)", fg_color="#0e2a22", text_color="#10b981"))
+            self.after(1500, lambda: self.export_btn.configure(text="📤   Export to Excel (.xlsx)", fg_color="#0e2a22", text_color="#10b981"))
 
             confirm = messagebox.askyesno(
                 "Export Complete",
@@ -265,24 +273,24 @@ class SettingsView(ctk.CTkScrollableFrame):
         categories = self.db.get_categories(active_type)
 
         if not categories:
-            lbl = ctk.CTkLabel(self.cat_scroll, text="No categories configured", font=ctk.CTkFont(size=11), text_color="#64748b")
-            lbl.pack(pady=20)
+            lbl = ctk.CTkLabel(self.cat_scroll, text="No categories configured", font=ctk.CTkFont(size=12), text_color="#64748b")
+            lbl.pack(pady=24)
             self.cat_row_widgets.append(lbl)
             return
 
         for cat in categories:
-            row = ctk.CTkFrame(self.cat_scroll, fg_color="#111625", corner_radius=6)
-            row.pack(fill="x", pady=2, padx=4)
+            row = ctk.CTkFrame(self.cat_scroll, fg_color="#111625", corner_radius=8)
+            row.pack(fill="x", pady=3, padx=6)
             self.cat_row_widgets.append(row)
 
-            ctk.CTkLabel(row, text=cat, font=ctk.CTkFont(size=12, weight="bold"), text_color="#f8fafc").pack(side="left", padx=10, pady=6)
+            ctk.CTkLabel(row, text=cat, font=ctk.CTkFont(size=13, weight="bold"), text_color="#f8fafc").pack(side="left", padx=14, pady=8)
 
             del_btn = ctk.CTkButton(
-                row, text="✕", width=24, height=24,
+                row, text="✕", width=28, height=28,
                 fg_color="#1e293b", hover_color="#ef4444", text_color="#94a3b8",
                 command=lambda c=cat: self.delete_category_action(c)
             )
-            del_btn.pack(side="right", padx=6, pady=4)
+            del_btn.pack(side="right", padx=8, pady=6)
 
     def add_category_inline(self):
         cat_name = self.new_cat_entry.get().strip()

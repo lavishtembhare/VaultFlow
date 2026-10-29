@@ -23,86 +23,88 @@ def _compact_axis_formatter(val, _pos):
 
 class AnalyticsView(ctk.CTkFrame):
     def __init__(self, parent, on_style_change=None):
-        super().__init__(parent, corner_radius=12, fg_color="#111625", border_width=1, border_color="#1e293b")
+        super().__init__(parent, corner_radius=14, fg_color="#111625", border_width=1, border_color="#1e293b")
         self.view_mode = "Accounts"
         self.pie_type = "Donut"
         self.on_style_change = on_style_change
 
-        # 1. Top Control Bar
+        # 1. Top Control Bar (Scaled for 1920x1080)
         top_bar = ctk.CTkFrame(self, fg_color="transparent")
-        top_bar.pack(fill="x", padx=18, pady=(14, 6))
+        top_bar.pack(fill="x", padx=24, pady=(18, 10))
 
         self.mode_toggle = ctk.CTkSegmentedButton(
             top_bar,
             values=["Accounts", "Expenses", "Incomes", "Monthly Trends", "Payment Modes"],
             command=self.change_view_mode,
+            height=36,
             selected_color="#38bdf8",
             selected_hover_color="#0284c7",
             text_color="#f8fafc",
-            font=ctk.CTkFont(size=12, weight="bold")
+            font=ctk.CTkFont(size=13, weight="bold")
         )
         self.mode_toggle.set("Accounts")
         self.mode_toggle.pack(side="left")
 
         self.highlight_lbl = ctk.CTkLabel(
             top_bar, text="",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#f59e0b"
         )
-        self.highlight_lbl.pack(side="left", padx=16)
+        self.highlight_lbl.pack(side="left", padx=20)
 
         self.pie_selector = ctk.CTkSegmentedButton(
             top_bar,
             values=["Donut", "Classic Pie", "Exploded"],
             command=self.change_pie_type,
+            height=36,
             selected_color="#2563eb",
-            font=ctk.CTkFont(size=12, weight="bold")
+            font=ctk.CTkFont(size=13, weight="bold")
         )
         self.pie_selector.set("Donut")
         self.pie_selector.pack(side="right")
 
         # 2. Remaining Account Balances Strip (Bank, Portfolio, Cash)
         self.balance_strip = ctk.CTkFrame(self, fg_color="transparent")
-        self.balance_strip.pack(fill="x", padx=14, pady=(2, 4))
+        self.balance_strip.pack(fill="x", padx=18, pady=(2, 8))
         self.balance_strip.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.bank_val_lbl = self._create_account_pill(
-            self.balance_strip, col=0, title="🏦  Bank Balance Left", default_color="#38bdf8"
+            self.balance_strip, col=0, title="🏦   Bank Balance Left", default_color="#38bdf8"
         )
         self.portfolio_val_lbl = self._create_account_pill(
-            self.balance_strip, col=1, title="📈  Portfolio Balance Left", default_color="#f59e0b"
+            self.balance_strip, col=1, title="📈   Portfolio Balance Left", default_color="#f59e0b"
         )
         self.cash_val_lbl = self._create_account_pill(
-            self.balance_strip, col=2, title="💵  Cash Balance Left", default_color="#10b981"
+            self.balance_strip, col=2, title="💵   Cash Balance Left", default_color="#10b981"
         )
 
-        # 3. Matplotlib Dual Chart Canvas
-        self.fig, (self.ax_left, self.ax_right) = plt.subplots(1, 2, figsize=(8.8, 3.9), dpi=100)
+        # 3. 1080p Widescreen Matplotlib Dual Chart Canvas
+        self.fig, (self.ax_left, self.ax_right) = plt.subplots(1, 2, figsize=(13.6, 5.6), dpi=100)
         self.fig.patch.set_facecolor('#111625')
-        self.fig.subplots_adjust(left=0.10, right=0.96, top=0.86, bottom=0.20, wspace=0.28)
+        self.fig.subplots_adjust(left=0.07, right=0.97, top=0.88, bottom=0.16, wspace=0.22)
 
         self.canvas_widget = FigureCanvasTkAgg(self.fig, master=self)
-        self.canvas_widget.get_tk_widget().pack(fill="both", expand=True, padx=12, pady=(2, 12))
+        self.canvas_widget.get_tk_widget().pack(fill="both", expand=True, padx=16, pady=(4, 16))
 
     def _create_account_pill(self, parent, col, title, default_color):
         pill = ctk.CTkFrame(
             parent, fg_color="#0c101b", corner_radius=10,
             border_width=1, border_color="#1e293b"
         )
-        pill.grid(row=0, column=col, sticky="ew", padx=4, pady=2)
+        pill.grid(row=0, column=col, sticky="ew", padx=6, pady=2)
 
         ctk.CTkLabel(
             pill, text=title,
-            font=ctk.CTkFont(size=11, weight="bold"),
+            font=ctk.CTkFont(size=13, weight="bold"),
             text_color="#94a3b8"
-        ).pack(side="left", padx=12, pady=8)
+        ).pack(side="left", padx=18, pady=12)
 
         val_lbl = ctk.CTkLabel(
             pill, text="$0.00",
-            font=ctk.CTkFont(size=14, weight="bold"),
+            font=ctk.CTkFont(size=17, weight="bold"),
             text_color=default_color
         )
-        val_lbl.pack(side="right", padx=12, pady=8)
+        val_lbl.pack(side="right", padx=18, pady=12)
         return val_lbl
 
     def change_view_mode(self, value):
@@ -343,18 +345,13 @@ class AnalyticsView(ctk.CTkFrame):
         self.canvas_widget.draw()
 
     def render_net_balance_charts(self, bar_labels, bar_values, pie_labels, pie_values, bar_colors, bar_title, pie_title, currency, palette):
-        """
-        Renders vertical column bars with Accounts (Bank, Portfolio, Cash) on the X-axis
-        and Remaining Balance on the Y-axis.
-        """
         x_positions = list(range(len(bar_labels)))
-        bar_width = 0.38 if len(bar_labels) <= 3 else 0.48
+        bar_width = 0.36 if len(bar_labels) <= 3 else 0.46
 
         min_val = float(min(bar_values)) if bar_values else 0.0
         max_val = float(max(bar_values)) if bar_values else 1.0
         span = max(abs(min_val), abs(max_val), 1.0)
 
-        # Ensure small non-zero balances (e.g. 47,500 vs 15,293,750) have at least a 6% visual bar height
         min_visual_height = span * 0.06
         plotted_values = [
             math.copysign(max(abs(v), min_visual_height), v) if v != 0 else 0.0
@@ -364,14 +361,13 @@ class AnalyticsView(ctk.CTkFrame):
         bars = self.ax_left.bar(x_positions, plotted_values, color=bar_colors, width=bar_width, zorder=3)
 
         self.ax_left.set_xticks(x_positions)
-        rot = 18 if len(bar_labels) > 4 else 0
+        rot = 16 if len(bar_labels) > 5 else 0
         ha_align = "right" if rot > 0 else "center"
-        self.ax_left.set_xticklabels(bar_labels, rotation=rot, ha=ha_align, color="#cbd5e1", fontsize=9.5, weight="bold")
-        self.ax_left.set_title(bar_title, color="#f8fafc", fontsize=10.5, weight="bold", pad=10)
-        self.ax_left.tick_params(colors="#64748b", labelsize=8.5)
+        self.ax_left.set_xticklabels(bar_labels, rotation=rot, ha=ha_align, color="#cbd5e1", fontsize=10.5, weight="bold")
+        self.ax_left.set_title(bar_title, color="#f8fafc", fontsize=12.5, weight="bold", pad=14)
+        self.ax_left.tick_params(colors="#64748b", labelsize=10)
         self.ax_left.yaxis.set_major_formatter(FuncFormatter(_compact_axis_formatter))
 
-        # Only show negative Y-axis space if there is actually a negative balance
         bottom_bound = (min(plotted_values) - span * 0.25) if min_val < 0 else 0.0
         top_bound = (max(plotted_values) + span * 0.25) if max_val > 0 else (span * 0.25)
         if bottom_bound == top_bound:
@@ -398,7 +394,7 @@ class AnalyticsView(ctk.CTkFrame):
                 label_str,
                 ha='center', va=va_align,
                 color='#f43f5e' if orig_val < 0 else '#f8fafc',
-                fontsize=8.5, weight="bold"
+                fontsize=10, weight="bold"
             )
 
         if pie_values:
@@ -407,25 +403,25 @@ class AnalyticsView(ctk.CTkFrame):
             acc_color_map = {"Bank": "#38bdf8", "Portfolio": "#f59e0b", "Cash": "#10b981"}
             slice_colors = [acc_color_map.get(lbl, palette[i % len(palette)]) for i, lbl in enumerate(pie_labels)]
 
-            wprops = dict(width=0.46, edgecolor='#111625', linewidth=2) if self.pie_type == "Donut" else dict(edgecolor='#111625', linewidth=1.5)
+            wprops = dict(width=0.46, edgecolor='#111625', linewidth=2.5) if self.pie_type == "Donut" else dict(edgecolor='#111625', linewidth=1.8)
 
             wedges, texts, autotexts = self.ax_right.pie(
                 pie_values, labels=pie_labels, autopct='%1.0f%%',
                 startangle=140, explode=explode, colors=slice_colors, wedgeprops=wprops,
-                textprops=dict(color="#cbd5e1", fontsize=8.5, weight="bold"),
+                textprops=dict(color="#cbd5e1", fontsize=10, weight="bold"),
                 pctdistance=0.74 if self.pie_type == "Donut" else 0.60
             )
 
             for at in autotexts:
                 at.set_color("#090d16")
                 at.set_weight("bold")
-                at.set_fontsize(8)
+                at.set_fontsize(9.5)
 
-            self.ax_right.set_title(pie_title, color="#f8fafc", fontsize=10.5, weight="bold", pad=10)
+            self.ax_right.set_title(pie_title, color="#f8fafc", fontsize=12.5, weight="bold", pad=14)
         else:
             self.ax_right.text(
                 0.5, 0.5, "No positive account balances yet\n(Log an Income to see share)",
-                ha='center', va='center', color='#64748b', fontsize=9.5,
+                ha='center', va='center', color='#64748b', fontsize=11,
                 transform=self.ax_right.transAxes
             )
             self.ax_right.axis('off')
@@ -433,17 +429,17 @@ class AnalyticsView(ctk.CTkFrame):
     def render_line_graph(self, ax, x_indices, y_values, labels, title, color, currency):
         ax.set_facecolor('#111625')
         if len(x_indices) == 1:
-            ax.scatter(x_indices, y_values, color=color, s=50, zorder=5)
+            ax.scatter(x_indices, y_values, color=color, s=65, zorder=5)
             ax.set_xlim(-0.5, 0.5)
         else:
-            ax.plot(x_indices, y_values, color=color, marker='o', linewidth=2.2, markersize=5, zorder=4)
+            ax.plot(x_indices, y_values, color=color, marker='o', linewidth=2.6, markersize=6, zorder=4)
             ax.fill_between(x_indices, y_values, color=color, alpha=0.15)
             ax.set_xlim(-0.3, len(x_indices) - 0.7)
 
         ax.set_xticks(x_indices)
-        ax.set_xticklabels(labels, rotation=22, ha='right', color='#94a3b8', fontsize=8.5)
-        ax.set_title(title, color="#f8fafc", fontsize=10.5, weight="bold", pad=10)
-        ax.tick_params(colors="#64748b", labelsize=8.5)
+        ax.set_xticklabels(labels, rotation=20, ha='right', color='#94a3b8', fontsize=10)
+        ax.set_title(title, color="#f8fafc", fontsize=12.5, weight="bold", pad=14)
+        ax.tick_params(colors="#64748b", labelsize=10)
         ax.yaxis.set_major_formatter(FuncFormatter(_compact_axis_formatter))
 
         y_max = max(y_values) if y_values and max(y_values) > 0 else 1.0
@@ -456,15 +452,11 @@ class AnalyticsView(ctk.CTkFrame):
 
         for x, y in zip(x_indices, y_values):
             if y > 0:
-                ax.text(x, y + (y_max * 0.035), f"{currency}{y:,.0f}", ha='center', va='bottom', color='#f8fafc', fontsize=8, weight='bold')
+                ax.text(x, y + (y_max * 0.035), f"{currency}{y:,.0f}", ha='center', va='bottom', color='#f8fafc', fontsize=9.5, weight='bold')
 
     def render_bar_and_pie(self, bar_labels, bar_values, pie_labels, pie_values, bar_colors, bar_title, pie_title, currency, is_currency_bar, palette):
-        """
-        Renders vertical column bars with Categories / Payment Modes on the X-axis
-        and Amounts / Frequencies on the Y-axis.
-        """
         x_positions = list(range(len(bar_labels)))
-        bar_width = 0.38 if len(bar_labels) <= 3 else 0.50
+        bar_width = 0.36 if len(bar_labels) <= 3 else 0.48
 
         max_val = float(max(bar_values)) if bar_values else 1.0
         min_visual_height = max_val * 0.05
@@ -473,11 +465,11 @@ class AnalyticsView(ctk.CTkFrame):
         bars = self.ax_left.bar(x_positions, plotted_values, color=bar_colors, width=bar_width, zorder=3)
 
         self.ax_left.set_xticks(x_positions)
-        rot = 20 if len(bar_labels) > 4 else 0
+        rot = 18 if len(bar_labels) > 4 else 0
         ha_align = "right" if rot > 0 else "center"
-        self.ax_left.set_xticklabels(bar_labels, rotation=rot, ha=ha_align, color="#cbd5e1", fontsize=9, weight="bold")
-        self.ax_left.set_title(bar_title, color="#f8fafc", fontsize=10.5, weight="bold", pad=10)
-        self.ax_left.tick_params(colors="#64748b", labelsize=8.5)
+        self.ax_left.set_xticklabels(bar_labels, rotation=rot, ha=ha_align, color="#cbd5e1", fontsize=10, weight="bold")
+        self.ax_left.set_title(bar_title, color="#f8fafc", fontsize=12.5, weight="bold", pad=14)
+        self.ax_left.tick_params(colors="#64748b", labelsize=10)
 
         if is_currency_bar:
             self.ax_left.yaxis.set_major_formatter(FuncFormatter(_compact_axis_formatter))
@@ -495,7 +487,7 @@ class AnalyticsView(ctk.CTkFrame):
                 bar.get_x() + bar.get_width() / 2,
                 plot_val + (max_val * 0.03),
                 label_str,
-                ha='center', va='bottom', color='#f8fafc', fontsize=8.5, weight="bold"
+                ha='center', va='bottom', color='#f8fafc', fontsize=9.5, weight="bold"
             )
 
         if pie_values:
@@ -503,21 +495,21 @@ class AnalyticsView(ctk.CTkFrame):
             explode = [0.06] * len(pie_values) if (self.pie_type == "Exploded" and len(pie_values) > 1) else None
             slice_colors = (palette * ((len(pie_values) // len(palette)) + 1))[:len(pie_values)]
 
-            wprops = dict(width=0.46, edgecolor='#111625', linewidth=2) if self.pie_type == "Donut" else dict(edgecolor='#111625', linewidth=1.5)
+            wprops = dict(width=0.46, edgecolor='#111625', linewidth=2.5) if self.pie_type == "Donut" else dict(edgecolor='#111625', linewidth=1.8)
 
             wedges, texts, autotexts = self.ax_right.pie(
                 pie_values, labels=pie_labels, autopct='%1.0f%%',
                 startangle=140, explode=explode, colors=slice_colors, wedgeprops=wprops,
-                textprops=dict(color="#cbd5e1", fontsize=8.5, weight="bold"),
+                textprops=dict(color="#cbd5e1", fontsize=10, weight="bold"),
                 pctdistance=0.74 if self.pie_type == "Donut" else 0.60
             )
 
             for at in autotexts:
                 at.set_color("#090d16")
                 at.set_weight("bold")
-                at.set_fontsize(8)
+                at.set_fontsize(9.5)
 
-            self.ax_right.set_title(pie_title, color="#f8fafc", fontsize=10.5, weight="bold", pad=10)
+            self.ax_right.set_title(pie_title, color="#f8fafc", fontsize=12.5, weight="bold", pad=14)
 
     def show_empty_message(self, message):
         self.highlight_lbl.configure(text="")
@@ -525,8 +517,8 @@ class AnalyticsView(ctk.CTkFrame):
         self.ax_right.clear()
         self.ax_left.set_facecolor('#111625')
         self.ax_right.set_facecolor('#111625')
-        self.ax_left.text(0.5, 0.5, message, ha='center', va='center', color='#64748b', fontsize=10.5, transform=self.ax_left.transAxes)
-        self.ax_right.text(0.5, 0.5, "Add or import transactions to view analytics", ha='center', va='center', color='#475569', fontsize=10, transform=self.ax_right.transAxes)
+        self.ax_left.text(0.5, 0.5, message, ha='center', va='center', color='#64748b', fontsize=12, transform=self.ax_left.transAxes)
+        self.ax_right.text(0.5, 0.5, "Add or import transactions to view analytics", ha='center', va='center', color='#475569', fontsize=11.5, transform=self.ax_right.transAxes)
         self.ax_left.axis('off')
         self.ax_right.axis('off')
         self.canvas_widget.draw()

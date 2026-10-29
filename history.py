@@ -20,48 +20,48 @@ class TransactionHistoryView(ctk.CTkFrame):
 
         # Page Header
         top_section = ctk.CTkFrame(self, fg_color="transparent")
-        top_section.grid(row=0, column=0, sticky="ew", padx=32, pady=(26, 14))
+        top_section.grid(row=0, column=0, sticky="ew", padx=40, pady=(32, 16))
         top_section.grid_columnconfigure(0, weight=1)
 
         title_row = ctk.CTkFrame(top_section, fg_color="transparent")
-        title_row.pack(fill="x", pady=(0, 12))
+        title_row.pack(fill="x", pady=(0, 14))
 
         title_left = ctk.CTkFrame(title_row, fg_color="transparent")
         title_left.pack(side="left")
 
         ctk.CTkLabel(
             title_left, text="Transaction Logs",
-            font=ctk.CTkFont(size=22, weight="bold"),
+            font=ctk.CTkFont(size=26, weight="bold"),
             text_color="#f8fafc"
         ).pack(side="left")
 
         self.count_badge = ctk.CTkLabel(
             title_left, text="0 records",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#162035",
             text_color="#38bdf8",
             corner_radius=8,
-            padx=10, pady=3
+            padx=12, pady=4
         )
-        self.count_badge.pack(side="left", padx=12)
+        self.count_badge.pack(side="left", padx=14)
 
-        # Action Buttons (Import Excel + Purge Ledger)
+        # Action Buttons
         actions_right = ctk.CTkFrame(title_row, fg_color="transparent")
         actions_right.pack(side="right")
 
         if self.on_import_excel_callback:
             self.import_btn = ctk.CTkButton(
-                actions_right, text="📥  Import Excel / CSV", height=34,
-                font=ctk.CTkFont(size=12, weight="bold"),
+                actions_right, text="📥   Import Excel / CSV", height=38,
+                font=ctk.CTkFont(size=13, weight="bold"),
                 fg_color="#162035", hover_color="#1e2d4a", text_color="#38bdf8",
                 border_width=1, border_color="#28385c", corner_radius=8,
                 command=self.on_import_excel_callback
             )
-            self.import_btn.pack(side="left", padx=(0, 10))
+            self.import_btn.pack(side="left", padx=(0, 12))
 
         self.clear_all_btn = ctk.CTkButton(
-            actions_right, text="Clear All", width=95, height=34,
-            font=ctk.CTkFont(size=12, weight="bold"),
+            actions_right, text="Clear All", width=105, height=38,
+            font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#2c0b14", hover_color="#45101f", text_color="#f43f5e",
             border_width=1, border_color="#45101f", corner_radius=8,
             command=self._handle_clear_all
@@ -76,26 +76,27 @@ class TransactionHistoryView(ctk.CTkFrame):
         self.search_entry = ctk.CTkEntry(
             search_bar,
             textvariable=self.search_var,
-            placeholder_text="Search logs by description, category, account, or payment mode...",
-            height=36,
+            placeholder_text="Search logs by description, category, account, date, or payment mode...",
+            height=42,
+            font=ctk.CTkFont(size=13),
             fg_color="#111625",
             border_color="#1e293b",
-            corner_radius=8
+            corner_radius=10
         )
         self.search_entry.pack(side="left", fill="x", expand=True)
         self.search_var.trace_add("write", lambda *_: self._apply_search_filter())
 
         # Logs Card Container
         self.list_container = ctk.CTkFrame(
-            self, corner_radius=12, fg_color="#111625",
+            self, corner_radius=14, fg_color="#111625",
             border_width=1, border_color="#1e293b"
         )
-        self.list_container.grid(row=1, column=0, sticky="nsew", padx=32, pady=(0, 26))
+        self.list_container.grid(row=1, column=0, sticky="nsew", padx=40, pady=(0, 32))
         self.list_container.grid_rowconfigure(0, weight=1)
         self.list_container.grid_columnconfigure(0, weight=1)
 
         self.scroll_area = ctk.CTkScrollableFrame(self.list_container, fg_color="transparent", corner_radius=0)
-        self.scroll_area.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.scroll_area.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
 
     def _handle_clear_all(self):
         if not self.row_cards:
@@ -139,17 +140,16 @@ class TransactionHistoryView(ctk.CTkFrame):
             self.empty_lbl = ctk.CTkLabel(
                 self.scroll_area,
                 text="No transaction records found.",
-                font=ctk.CTkFont(size=13),
+                font=ctk.CTkFont(size=14),
                 text_color="#64748b"
             )
-            self.empty_lbl.pack(pady=45)
+            self.empty_lbl.pack(pady=60)
             return
 
         query = self.search_var.get().strip().lower()
         compact_enabled = db.get_setting("compact_numbers", "False") == "True"
         format_style = db.get_setting("number_format", "Millions / Billions")
 
-        # Single O(n) pass over rows using itertuples
         matched_rows = 0
         for idx, row in enumerate(df.itertuples(index=False)):
             tx_id = getattr(row, "id", idx)
@@ -181,11 +181,11 @@ class TransactionHistoryView(ctk.CTkFrame):
                 border_color="#38bdf8" if is_newest else "#1c2539",
                 corner_radius=10
             )
-            row_card.pack(fill="x", pady=4, padx=4)
+            row_card.pack(fill="x", pady=5, padx=6)
             self.row_cards.append(row_card)
 
             left_col = ctk.CTkFrame(row_card, fg_color="transparent")
-            left_col.pack(side="left", padx=14, pady=10)
+            left_col.pack(side="left", padx=18, pady=12)
 
             title_text = desc if desc else category
             if is_newest:
@@ -193,7 +193,7 @@ class TransactionHistoryView(ctk.CTkFrame):
 
             ctk.CTkLabel(
                 left_col, text=title_text,
-                font=ctk.CTkFont(size=13, weight="bold"),
+                font=ctk.CTkFont(size=14, weight="bold"),
                 text_color="#f8fafc"
             ).pack(anchor="w")
 
@@ -201,24 +201,24 @@ class TransactionHistoryView(ctk.CTkFrame):
             ctk.CTkLabel(
                 left_col,
                 text=f"{date_str}   •   {category}   •   {meta_tag}   •   {pm}",
-                font=ctk.CTkFont(size=11),
+                font=ctk.CTkFont(size=12),
                 text_color="#64748b"
-            ).pack(anchor="w", pady=(2, 0))
+            ).pack(anchor="w", pady=(3, 0))
 
             right_col = ctk.CTkFrame(row_card, fg_color="transparent")
-            right_col.pack(side="right", padx=14, pady=10)
+            right_col.pack(side="right", padx=18, pady=12)
 
             amt_formatted = format_currency_amount(amount, currency, format_style, compact_enabled)
             ctk.CTkLabel(
                 right_col,
                 text=f"{sign}{amt_formatted}",
-                font=ctk.CTkFont(size=14, weight="bold"),
+                font=ctk.CTkFont(size=16, weight="bold"),
                 text_color=accent_color
-            ).pack(side="left", padx=12)
+            ).pack(side="left", padx=16)
 
             del_btn = ctk.CTkButton(
-                right_col, text="✕", width=28, height=28,
-                corner_radius=6,
+                right_col, text="✕", width=32, height=32,
+                corner_radius=8,
                 fg_color="#182032", hover_color="#ef4444", text_color="#94a3b8",
                 command=lambda tid=tx_id: self.on_delete_callback(tid)
             )
@@ -230,7 +230,7 @@ class TransactionHistoryView(ctk.CTkFrame):
             self.empty_lbl = ctk.CTkLabel(
                 self.scroll_area,
                 text="No matching transactions found.",
-                font=ctk.CTkFont(size=13),
+                font=ctk.CTkFont(size=14),
                 text_color="#64748b"
             )
-            self.empty_lbl.pack(pady=45)
+            self.empty_lbl.pack(pady=60)

@@ -7,6 +7,15 @@ from PIL import ImageTk
 
 from make_vaultflow_icon import ensure_vaultflow_icon
 
+# Enable native 1920x1080 High-DPI crispness on Windows
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 try:
     myappid = 'vaultflow.privateasset.desktop.2.0'
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
@@ -15,6 +24,8 @@ except Exception:
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+ctk.set_widget_scaling(1.0)
+ctk.set_window_scaling(1.0)
 
 def get_asset_path(filename: str) -> str:
     if getattr(sys, 'frozen', False):
@@ -27,11 +38,23 @@ class VaultFlowApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("VaultFlow — Private Asset & Liquid Flow Suite")
-        self.geometry("1240x800")
-        self.minsize(1080, 720)
-        self.configure(fg_color="#080a11")
 
-        # 1. Apply icon & force immediate window paint before loading heavy libraries
+        # Center 1680x940 fallback geometry and auto-maximize for 1920x1080p
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = min(1720, screen_w - 80)
+        win_h = min(960, screen_h - 80)
+        pos_x = max(0, (screen_w - win_w) // 2)
+        pos_y = max(0, (screen_h - win_h) // 2)
+        self.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+        self.minsize(1280, 760)
+        self.configure(fg_color="#080a11")
+        self._is_fullscreen = False
+
+        # Maximize window to full 1920x1080 workspace
+        self.after(10, lambda: self.state("zoomed"))
+
+        # Apply icon & render shell immediately
         icon_path = get_asset_path("vaultflow_icon.ico")
         pil_icon = ensure_vaultflow_icon(icon_path)
         try:
@@ -54,11 +77,9 @@ class VaultFlowApp(ctk.CTk):
         self.main_container.grid_columnconfigure(0, weight=1)
         self.main_container.grid_rowconfigure(0, weight=1)
 
-        # Render the window shell immediately on screen
         self.update_idletasks()
         self.update()
 
-        # 2. Load database and views now that the window is visible
         from database import DatabaseManager
         from metrics import MetricCardsView
         from analytics import AnalyticsView
@@ -70,29 +91,29 @@ class VaultFlowApp(ctk.CTk):
         self.currency = self.db.get_setting("currency", "$")
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # VIEW 1: DASHBOARD
+        # VIEW 1: 1080p DASHBOARD
         self.dashboard_view = ctk.CTkFrame(self.main_container, fg_color="transparent")
         self.dashboard_view.grid_columnconfigure(0, weight=1)
         self.dashboard_view.grid_rowconfigure(1, weight=1)
 
         dash_padding = ctk.CTkFrame(self.dashboard_view, fg_color="transparent")
-        dash_padding.pack(fill="both", expand=True, padx=24, pady=24)
+        dash_padding.pack(fill="both", expand=True, padx=32, pady=28)
         dash_padding.grid_columnconfigure(0, weight=1)
         dash_padding.grid_rowconfigure(1, weight=1)
 
         self.metrics_view = MetricCardsView(dash_padding)
-        self.metrics_view.grid(row=0, column=0, sticky="ew", pady=(0, 16))
+        self.metrics_view.grid(row=0, column=0, sticky="ew", pady=(0, 20))
 
         self.analytics_view = AnalyticsView(dash_padding, on_style_change=self.refresh_ui)
         self.analytics_view.grid(row=1, column=0, sticky="nsew")
 
-        # VIEW 2: FULL-SCREEN DATA ENTRY
+        # VIEW 2: DATA ENTRY
         self.entry_view = EntryView(
             self.main_container, self.db,
             on_transaction_saved=self.handle_transaction_saved
         )
 
-        # VIEW 3: SEPARATE TRANSACTION LOGS TAB
+        # VIEW 3: TRANSACTION LOGS TAB
         self.logs_view = TransactionHistoryView(
             self.main_container,
             on_delete_callback=self.delete_record,
@@ -119,9 +140,14 @@ class VaultFlowApp(ctk.CTk):
         self.bind("<Control-Key-3>", lambda e: self.navigate_hotkey("logs"))
         self.bind("<Control-Key-4>", lambda e: self.navigate_hotkey("settings"))
         self.bind("<F5>", lambda e: self.refresh_ui())
+        self.bind("<F11>", self.toggle_fullscreen)
 
         self.show_view("dashboard")
         self.refresh_ui(highlight_new=False)
+
+    def toggle_fullscreen(self, _event=None):
+        self._is_fullscreen = not self._is_fullscreen
+        self.attributes("-fullscreen", self._is_fullscreen)
 
     def navigate_hotkey(self, view_key: str):
         self.sidebar.set_active(view_key)
